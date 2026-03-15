@@ -3,6 +3,7 @@ from rest_framework import viewsets
 from .models import Space
 from .serializers import SpaceSerializer
 
+
 # Create your views here.
 class SpaceViewSet(viewsets.ModelViewSet):
     queryset = Space.objects.all()
