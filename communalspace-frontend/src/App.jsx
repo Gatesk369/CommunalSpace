@@ -1,121 +1,62 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from "react";
+import axios from "axios";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [spaces, setSpaces] = useState([]);
+
+  const fetchSpaces = async () => {
+    try {
+      const response = await axios.get("http://127.0.0.1:8000/api/spaces/");
+      setSpaces(response.data);
+    } catch (error) {
+      console.error("Backend connection failed!", error);
+    }
+  };
+  fetchSpaces();
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    // bg-slate-50: Very light gray background
+    // min-h-screen: Ensures background covers the whole page
+    <div className="min-h-screen bg-slate-50 p-6 md:p-12">
+      <header className="max-w-6xl mx-auto mb-12">
+        <h1 className="text-5xl font-black text-slate-900 tracking-tight">
+          Communal<span className="text-indigo-600">Space</span>
+        </h1>
+        <p className="text-slate-500 mt-2 text-lg">
+          Your neighborhood, digitally connected.
+        </p>
+      </header>
 
-      <div className="ticks"></div>
+      {/* Grid system: 1 col on mobile, 2 on tablet, 3 on desktop */}
+      <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {spaces.map((space) => (
+          <div
+            key={space.id}
+            className="group bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-xl hover:border-indigo-200 transition-all duration-300"
+          >
+            {/* Type Badge */}
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-indigo-50 text-indigo-600">
+              {space.location_type}
+            </span>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+            <h2 className="text-2xl font-bold text-slate-800 mt-4 group-hover:text-indigo-600 transition-colors">
+              {space.name}
+            </h2>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            <p className="text-slate-600 mt-3 line-clamp-3 text-sm leading-relaxed">
+              {space.description}
+            </p>
+
+            <div className="mt-6 pt-6 border-t border-slate-100">
+              <button className="w-full bg-slate-900 text-white py-3 rounded-xl font-semibold hover:bg-indigo-600 transition-colors shadow-lg shadow-slate-200 hover:shadow-indigo-200">
+                View Space Details
+              </button>
+            </div>
+          </div>
+        ))}
+      </main>
+    </div>
+  );
 }
 
-export default App
+export default App;
