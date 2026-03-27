@@ -1,16 +1,15 @@
 from django.db import models
-from accounts.models import User
 
 
 # Create your models here.
 class Business(models.Model):
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(
-        User,
+        "accounts.User",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        limit_choices_to={"role": User.BUSINESS_OWNER},
+        limit_choices_to={"role": "business owner"},
         related_name="businesses",
     )
     city = models.CharField(max_length=255)
@@ -28,7 +27,10 @@ class BusinessOwnerHistory(models.Model):
         Business, on_delete=models.CASCADE, related_name="owner_history"
     )
     owner = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name="owner_history"
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="owner_history",
     )
     transferred_at = models.DateTimeField(auto_now_add=True)
 

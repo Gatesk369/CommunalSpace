@@ -28,12 +28,14 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser):
     RESIDENT = "resident"
-    ADMIN = "admin"
     BUSINESS_OWNER = "business owner"
+    COMMUNITY_ADMIN = "community admin"
+    ADMIN = "admin"
 
     ROLE_CHOICES = (
         (RESIDENT, "Resident"),
         (BUSINESS_OWNER, "Business Owner"),
+        (COMMUNITY_ADMIN, "Community Admin"),
         (ADMIN, "Admin"),
     )
 
@@ -45,8 +47,14 @@ class User(AbstractBaseUser):
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=True)
-    community_id = models.CharField(max_length=255, null=True, blank=True)
+    is_staff = models.BooleanField(default=False)
+    community = models.ForeignKey(
+        "communities.Community",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="members",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
