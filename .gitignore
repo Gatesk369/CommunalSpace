@@ -40,3 +40,6 @@ media_root/
 # In case you ever export your DB locally
 *.sql
 *.dump
+
+# --- Codex ---
+.codex
