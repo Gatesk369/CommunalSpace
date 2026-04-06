@@ -6,12 +6,30 @@ from rest_framework import status
 
 
 # Create your views here.
-class CommunityListCreateView(APIView):
-    def get(self, request):
-        communities = Community.objects.all()
-        serializer = CommunitySerializer(communities, many=True)
+class CommunityBaseView(APIView):
+    def get_object(self, pk):
+        try:
+            return Community.objects.get(pk=pk)
+        except Community.DoesNotExist:
+            return None
+
+
+class CommunityListDetailView(CommunityBaseView):
+    def get(self, request, pk=None):
+        if pk is None:
+            communities = Community.objects.all()
+            serializer = CommunitySerializer(communities, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        community = self.get_object(pk)
+        if community is None:
+            return Response(
+                {"detail": "Community not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        serializer = CommunitySerializer(community)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+class CommunityCreateView(APIView):
     def post(self, request):
         serializer = CommunitySerializer(data=request.data)
         if serializer.is_valid():
@@ -20,23 +38,7 @@ class CommunityListCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class CommunityDetailView(APIView):
-    def get_object(self, pk):
-        try:
-            return Community.objects.get(pk=pk)
-        except Community.DoesNotExist:
-            return None
-
-    def get(self, request, pk):
-        community = self.get_object(pk)
-        if community is None:
-            return Response(
-                {"detail": "Community not found."}, status=status.HTTP_404_NOT_FOUND
-            )
-
-        serializer = CommunitySerializer(community)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
+class CommunityUpdateView(CommunityBaseView):
     def put(self, request, pk):
         community = self.get_object(pk)
         if community is None:
@@ -63,6 +65,8 @@ class CommunityDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+class CommunityDeleteView(CommunityBaseView):
     def delete(self, request, pk):
         community = self.get_object(pk)
         if community is None:
