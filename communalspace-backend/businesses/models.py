@@ -3,15 +3,32 @@ from django.db import models
 
 # Create your models here.
 class Business(models.Model):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+    STATUS_CHOICES = (
+        (PENDING, "Pending"),
+        (APPROVED, "Approved"),
+        (REJECTED, "Rejected"),
+    )
+
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        limit_choices_to={"role": "business owner"},
         related_name="businesses",
     )
+    community = models.ForeignKey(
+        "communities.Community",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="businesses",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    rejection_reason = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -26,7 +43,7 @@ class BusinessBranch(models.Model):
         "communities.Community",
         on_delete=models.SET_NULL,
         null=True,
-        related_name="businesses",
+        related_name="branches",
     )
     address = models.CharField(max_length=255)
     city = models.CharField(max_length=255)

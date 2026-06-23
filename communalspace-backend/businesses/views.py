@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from .models import Business
 from .serializers import BusinessSerializer
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 
 
 # Create your views here.
@@ -30,12 +31,71 @@ class BusinessListDetailView(BusinessBaseView):
 
 
 class BusinessCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = BusinessSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(owner=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BusinessApprovalView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        community = request.user.administered_communities.first()
+        if community is None:
+            return Response(
+                {"detail": " You are not an admin of any community."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        businesses = Business.objects.filter(
+            community=community, status=Business.PENDING
+        )
+        serializer = BusinessSerializer(businesses, many=True)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request, pk):
+        try:
+            business = Business.objects.get(pk=pk)
+        except Business.DoesNotExist:
+            return Response(
+                {"detail": "Business not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        community = request.user.administered_communities.first()
+        if community is None or business.community != community:
+            return Response(
+                {"detail": "Your are not authorized to review this business"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        action = request.data.get("action")
+
+        if action == "approve":
+            business.status = Business.APPROVED
+            business.save()
+            owner = business.owner
+            if owner and owner.role != "business owner":
+                owner.role = "business owner"
+                owner.save()
+            return Response({"detail": "Business approved."}, status=status.HTTP_200_OK)
+
+        elif action == "reject":
+            business.status = Business.REJECTED
+            business.rejection_reason = request.data.get("rejection_reason", "")
+            business.save()
+            return Response({"detail": "Business rejected."}, status=status.HTTP_200_OK)
+
+        return Response(
+            {"detail": "Invald action. Use 'approve' or 'reject'"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class BusinessUpdateView(BusinessBaseView):
