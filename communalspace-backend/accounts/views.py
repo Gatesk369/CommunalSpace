@@ -3,7 +3,8 @@ from rest_framework.views import APIView
 from .models import User
 from .serializers import UserSerializer
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from .permissions import IsAdmin, IsSelfOrAdmin
 
 
 # Create your views here.
@@ -16,6 +17,11 @@ class UserBaseView(APIView):
 
 
 class UserListDetailView(UserBaseView):
+    def get_permissions(self):
+        if self.kwargs.get("pk"):
+            return [IsAuthenticated(), IsSelfOrAdmin()]
+        return [IsAdmin()]
+
     def get(self, request, pk=None):
         if pk is None:
             users = User.objects.all()
@@ -26,6 +32,7 @@ class UserListDetailView(UserBaseView):
             return Response(
                 {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
+        self.check_object_permissions(request, user)
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -42,13 +49,15 @@ class UserCreateView(APIView):
 
 
 class UserUpdateView(UserBaseView):
+    permission_classes = [IsAuthenticated, IsSelfOrAdmin]
+
     def put(self, request, pk):
         user = self.get_object(pk)
         if user is None:
             return Response(
                 {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
+        self.check_object_permissions(request, user)
         serializer = UserSerializer(user, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -61,7 +70,7 @@ class UserUpdateView(UserBaseView):
             return Response(
                 {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
+        self.check_object_permissions(request, user)
         serializer = UserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -70,12 +79,14 @@ class UserUpdateView(UserBaseView):
 
 
 class UserDeleteView(UserBaseView):
+    permission_classes = [IsAuthenticated, IsSelfOrAdmin]
+
     def delete(self, request, pk):
         user = self.get_object(pk)
         if user is None:
             return Response(
                 {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
+        self.check_object_permissions(request, user)
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

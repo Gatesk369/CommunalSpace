@@ -3,6 +3,8 @@ from rest_framework.views import APIView
 from .models import Community
 from .serializers import CommunitySerializer
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsAdmin, IsCommunityAdminOrAdmin
 
 
 # Create your views here.
@@ -15,6 +17,8 @@ class CommunityBaseView(APIView):
 
 
 class CommunityListDetailView(CommunityBaseView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, pk=None):
         if pk is None:
             communities = Community.objects.all()
@@ -30,6 +34,8 @@ class CommunityListDetailView(CommunityBaseView):
 
 
 class CommunityCreateView(APIView):
+    permission_classes = [IsAdmin]
+
     def post(self, request):
         serializer = CommunitySerializer(data=request.data)
         if serializer.is_valid():
@@ -39,6 +45,8 @@ class CommunityCreateView(APIView):
 
 
 class CommunityUpdateView(CommunityBaseView):
+    permission_classes = [IsAuthenticated, IsCommunityAdminOrAdmin]
+
     def put(self, request, pk):
         community = self.get_object(pk)
         if community is None:
@@ -46,6 +54,7 @@ class CommunityUpdateView(CommunityBaseView):
                 {"detail": "Community not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
+        self.check_object_permissions(request, community)
         serializer = CommunitySerializer(community, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -59,6 +68,7 @@ class CommunityUpdateView(CommunityBaseView):
                 {"detail": "Community not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
+        self.check_object_permissions(request, community)
         serializer = CommunitySerializer(community, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -67,6 +77,8 @@ class CommunityUpdateView(CommunityBaseView):
 
 
 class CommunityDeleteView(CommunityBaseView):
+    permission_classes = [IsAdmin]
+
     def delete(self, request, pk):
         community = self.get_object(pk)
         if community is None:

@@ -4,6 +4,7 @@ from .models import Business
 from .serializers import BusinessSerializer
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from accounts.permissions import IsCommunityAdmin, IsBusinessOwnerOrAdmin
 
 
 # Create your views here.
@@ -16,13 +17,26 @@ class BusinessBaseView(APIView):
 
 
 class BusinessListDetailView(BusinessBaseView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, pk=None):
         if pk is None:
-            businesses = Business.objects.all()
+            if request.user.role == "community admin":
+                community = request.user.administered_communities.first()
+                businesses = Business.objects.filter(community=community)
+            else:
+                businesses = Business.objects.filter(status=Business.APPROVED)
             serializer = BusinessSerializer(businesses, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         business = self.get_object(pk)
         if business is None:
+            return Response(
+                {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        if business.status != Business.APPROVED and request.user.role not in [
+            "admin",
+            "community admin",
+        ]:
             return Response(
                 {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
             )
@@ -42,7 +56,7 @@ class BusinessCreateView(APIView):
 
 
 class BusinessApprovalView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsCommunityAdmin]
 
     def get(self, request):
         community = request.user.administered_communities.first()
@@ -99,13 +113,15 @@ class BusinessApprovalView(APIView):
 
 
 class BusinessUpdateView(BusinessBaseView):
+    permission_classes = [IsAuthenticated, IsBusinessOwnerOrAdmin]
+
     def put(self, request, pk):
         business = self.get_object(pk)
         if business is None:
             return Response(
                 {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
+        self.check_object_permissions(request, business)
         serializer = BusinessSerializer(business, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -118,7 +134,7 @@ class BusinessUpdateView(BusinessBaseView):
             return Response(
                 {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
+        self.check_object_permissions(request, business)
         serializer = BusinessSerializer(business, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -127,12 +143,14 @@ class BusinessUpdateView(BusinessBaseView):
 
 
 class BusinessDeleteView(BusinessBaseView):
+    permission_classes = [IsAuthenticated, IsBusinessOwnerOrAdmin]
+
     def delete(self, request, pk):
         business = self.get_object(pk)
         if business is None:
             return Response(
                 {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
+        self.check_object_permissions(request, business)
         business.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
