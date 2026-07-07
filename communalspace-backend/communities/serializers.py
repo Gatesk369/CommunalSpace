@@ -20,4 +20,4 @@ class CommunityAdminApplicationSerializer(ModelSerializer):
             "reviewed_at",
             "reviewed_by",
         ]
-        read_oly_fields = ["status", "applied_at", "reviewed_at", "reviewed_by"]
+        read_only_fields = ["status", "applied_at", "reviewed_at", "reviewed_by"]

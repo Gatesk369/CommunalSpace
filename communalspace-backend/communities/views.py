@@ -95,7 +95,12 @@ class CommunityApplicationSeasonView(APIView):
     permission_classes = [IsAdmin]
 
     def post(self, request, pk):
-        community = Community.objects.get(pk=pk)
+        try:
+            community = Community.objects.get(pk=pk)
+        except Community.DoesNotExist:
+            return Response(
+                {"detail": "Community not found"}, status=status.HTTP_404_NOT_FOUND
+            )
         action = request.data.get("action")
 
         if action == "open":
@@ -180,6 +185,12 @@ class CommunityAdminApplicationReviewView(APIView):
             )
 
         action = request.data.get("action")
+
+        if application.status != CommunityAdminApplication.PENDING:
+            return Response(
+                {"detail": "This application has already been reviewed"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if action == "approve":
             application.status = CommunityAdminApplication.APPROVED

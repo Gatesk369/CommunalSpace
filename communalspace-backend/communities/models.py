@@ -50,5 +50,14 @@ class CommunityAdminApplication(models.Model):
         related_name="reviewed_applications",
     )
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["applicant", "community"],
+                condition=models.Q(status="pending"),
+                name="unique_pending_application_per_applicant_community",
+            )
+        ]
+
     def __str__(self):
         return f"{self.applicant.email} - {self.community.name} - {self.status}"
