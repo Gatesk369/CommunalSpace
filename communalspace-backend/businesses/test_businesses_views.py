@@ -27,7 +27,9 @@ def create_community(name="Test Community", admin=None):
     )
 
 
-def create_business(name="Test Business", owner=None, community=None, status=Business.APPROVED):
+def create_business(
+    name="Test Business", owner=None, community=None, status=Business.APPROVED
+):
     return Business.objects.create(
         name=name,
         owner=owner,
@@ -88,13 +90,17 @@ class BusinessListDetailViewTest(TestCase):
     def test_resident_cannot_access_pending_business_directly(self):
         token = get_token(self.client, "resident@test.com")
         auth_client(self.client, token)
-        response = self.client.get(reverse("business-detail", args=[self.pending_business.pk]))
+        response = self.client.get(
+            reverse("business-detail", args=[self.pending_business.pk])
+        )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_resident_can_access_approved_business_directly(self):
         token = get_token(self.client, "resident@test.com")
         auth_client(self.client, token)
-        response = self.client.get(reverse("business-detail", args=[self.approved_business.pk]))
+        response = self.client.get(
+            reverse("business-detail", args=[self.approved_business.pk])
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
@@ -137,11 +143,15 @@ class BusinessApprovalViewTest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.community_admin = create_user("cadmin@test.com", role="community admin")
-        self.other_community_admin = create_user("other_cadmin@test.com", role="community admin")
+        self.other_community_admin = create_user(
+            "other_cadmin@test.com", role="community admin"
+        )
         self.resident = create_user("resident@test.com", role="resident")
         self.business_owner = create_user("owner@test.com", role="resident")
         self.community = create_community(admin=self.community_admin)
-        self.other_community = create_community(name="Other Community", admin=self.other_community_admin)
+        self.other_community = create_community(
+            name="Other Community", admin=self.other_community_admin
+        )
         self.pending_business = create_business(
             name="Pending Shop",
             owner=self.business_owner,

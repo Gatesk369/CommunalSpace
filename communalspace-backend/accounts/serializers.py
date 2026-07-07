@@ -4,6 +4,7 @@ from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    role = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
@@ -19,6 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
+        validated_data["role"] = "resident"
         password = validated_data.pop("password")
         user = User(**validated_data)
         user.set_password(password)
