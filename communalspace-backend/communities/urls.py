@@ -4,6 +4,9 @@ from .views import (
     CommunityCreateView,
     CommunityUpdateView,
     CommunityDeleteView,
+    CommunityApplicationSeasonView,
+    CommunityAdminApplicationView,
+    CommunityAdminApplicationReviewView,
 )
 
 urlpatterns = [
@@ -23,5 +26,20 @@ urlpatterns = [
         "delete-community/<int:pk>/",
         CommunityDeleteView.as_view(),
         name="community-delete",
+    ),
+    path(
+        "<int:pk>/application-season/",
+        CommunityApplicationSeasonView.as_view(),
+        name="community-application-season",
+    ),
+    path(
+        "<int:pk>/apply/",
+        CommunityAdminApplicationView.as_view(),
+        name="community-apply",
+    ),
+    path(
+        "<int:pk>/applications/<int:app_pk>/review/",
+        CommunityAdminApplicationReviewView.as_view(),
+        name="community-application-review",
     ),
 ]
