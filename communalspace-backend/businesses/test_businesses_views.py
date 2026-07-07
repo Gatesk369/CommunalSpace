@@ -19,12 +19,15 @@ def create_user(email, role="resident", password="testpass123", **kwargs):
 
 
 def create_community(name="Test Community", admin=None):
-    return Community.objects.create(
+    community = Community.objects.create(
         name=name,
         city="Test City",
         address="123 Test St",
-        admin=admin,
     )
+    if admin is not None:
+        community.admins.add(admin)
+
+    return community
 
 
 def create_business(
