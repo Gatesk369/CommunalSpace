@@ -92,7 +92,10 @@ class CommunityDeleteView(CommunityBaseView):
 
 
 class CommunityApplicationSeasonView(APIView):
-    permission_classes = [IsAdmin]
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticated()]
+        return [IsAdmin()]
 
     def post(self, request, pk):
         try:
@@ -119,6 +122,18 @@ class CommunityApplicationSeasonView(APIView):
         return Response(
             {"detail": "Invalid action. Use 'open' or 'close'."},
             status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def get(self, request, pk):
+        try:
+            community = Community.objects.get(pk=pk)
+        except Community.DoesNotExist:
+            return Response(
+                {"detail": "Community not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(
+            {"applications_open": community.applications_open},
+            status=status.HTTP_200_OK,
         )
 
 
