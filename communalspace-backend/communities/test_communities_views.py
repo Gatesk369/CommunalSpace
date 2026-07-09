@@ -261,6 +261,16 @@ class CommunityApplicationSeasonViewTest(TestCase):
             response.data["detail"], "Invalid action. Use 'open' or 'close'."
         )
 
+    def test_authenticated_can_get_status(self):
+        self.client.force_authenticate(user=self.resident)
+
+        response = self.client.get(
+            reverse("community-application-season", args=[self.community.pk]),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["applications_open"])
+
 
 class CommunityAdminApplicationViewTest(TestCase):
     def setUp(self):
