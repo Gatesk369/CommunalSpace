@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from accounts.models import User
 from communities.models import Community
-from businesses.models import Business
+from businesses.models import Business, BusinessBranch
 
 
 def create_user(email, role="resident", password="testpass123", **kwargs):
@@ -52,6 +52,127 @@ def get_token(client, email, password="testpass123"):
 
 def auth_client(client, token):
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+
+def create_branch(business, community, status=BusinessBranch.PENDING):
+    return BusinessBranch.objects.create(
+        business=business,
+        community=community,
+        address="123 Main St",
+        city="Kampala",
+        contact_phone="0700000000",
+        contact_email="branch@test.com",
+        status=status,
+    )
+
+
+class BusinessBranchApprovalViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.community_admin = create_user("cadmin@test.com", role="community admin")
+        self.other_community_admin = create_user(
+            "other_cadmin@test.com", role="community admin"
+        )
+        self.resident = create_user("resident@test.com", role="resident")
+        self.owner = create_user("owner@test.com", role="business owner")
+        self.community = create_community(admin=self.community_admin)
+        self.other_community = create_community(
+            name="Other Community", admin=self.other_community_admin
+        )
+        self.business = create_business(
+            owner=self.owner, community=self.community, status=Business.APPROVED
+        )
+        self.pending_branch = create_branch(
+            business=self.business, community=self.community
+        )
+
+    def test_community_admin_can_see_pending_branches(self):
+        token = get_token(self.client, "cadmin@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("branch-pending"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_resident_cannot_see_pending_branches(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("branch-pending"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_community_admin_can_approve_branch(self):
+        token = get_token(self.client, "cadmin@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("branch-review", args=[self.pending_branch.pk]),
+            {"action": "approve"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.pending_branch.refresh_from_db()
+        self.assertEqual(self.pending_branch.status, BusinessBranch.APPROVED)
+
+    def test_community_admin_can_reject_branch(self):
+        token = get_token(self.client, "cadmin@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("branch-review", args=[self.pending_branch.pk]),
+            {"action": "reject", "rejection_reason": "Invalid location"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.pending_branch.refresh_from_db()
+        self.assertEqual(self.pending_branch.status, BusinessBranch.REJECTED)
+        self.assertEqual(self.pending_branch.rejection_reason, "Invalid location")
+
+    def test_other_community_admin_cannot_review_branch(self):
+        token = get_token(self.client, "other_cadmin@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("branch-review", args=[self.pending_branch.pk]),
+            {"action": "approve"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_invalid_action_returns_400(self):
+        token = get_token(self.client, "cadmin@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("branch-review", args=[self.pending_branch.pk]),
+            {"action": "invalid"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_business_approval_also_approves_first_branch(self):
+        # create a pending business with a branch
+        pending_business = create_business(
+            owner=self.owner, community=self.community, status=Business.PENDING
+        )
+        branch = create_branch(business=pending_business, community=self.community)
+        token = get_token(self.client, "cadmin@test.com")
+        auth_client(self.client, token)
+        self.client.post(
+            reverse("business-review", args=[pending_business.pk]),
+            {"action": "approve"},
+            format="json",
+        )
+        branch.refresh_from_db()
+        self.assertEqual(branch.status, BusinessBranch.APPROVED)
+
+    def test_business_rejection_also_rejects_first_branch(self):
+        pending_business = create_business(
+            owner=self.owner, community=self.community, status=Business.PENDING
+        )
+        branch = create_branch(business=pending_business, community=self.community)
+        token = get_token(self.client, "cadmin@test.com")
+        auth_client(self.client, token)
+        self.client.post(
+            reverse("business-review", args=[pending_business.pk]),
+            {"action": "reject", "rejection_reason": "Fake business"},
+            format="json",
+        )
+        branch.refresh_from_db()
+        self.assertEqual(branch.status, BusinessBranch.REJECTED)
 
 
 class BusinessListDetailViewTest(TestCase):
@@ -112,13 +233,23 @@ class BusinessCreateViewTest(TestCase):
         self.client = APIClient()
         self.resident = create_user("resident@test.com", role="resident")
         self.community = create_community()
+        self.business_payload = {
+            "name": "My Shop",
+            "community": self.community.pk,
+            "branch": {
+                "address": "123 Main St",
+                "city": "Kampala",
+                "contact_phone": "0700000000",
+                "contact_email": "myshop@email.com",
+            },
+        }
 
     def test_authenticated_user_can_submit_business(self):
         token = get_token(self.client, "resident@test.com")
         auth_client(self.client, token)
         response = self.client.post(
             reverse("business-create"),
-            {"name": "My Shop", "community": self.community.pk},
+            self.business_payload,
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -128,7 +259,7 @@ class BusinessCreateViewTest(TestCase):
         auth_client(self.client, token)
         response = self.client.post(
             reverse("business-create"),
-            {"name": "My Shop", "community": self.community.pk},
+            self.business_payload,
             format="json",
         )
         self.assertEqual(response.data["status"], Business.PENDING)
@@ -136,7 +267,7 @@ class BusinessCreateViewTest(TestCase):
     def test_unauthenticated_cannot_create_business(self):
         response = self.client.post(
             reverse("business-create"),
-            {"name": "My Shop", "community": self.community.pk},
+            self.business_payload,
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

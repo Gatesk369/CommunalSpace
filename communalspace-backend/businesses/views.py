@@ -1,7 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Business
-from .serializers import BusinessSerializer
+from .models import Business, BusinessBranch
+from .serializers import BusinessSerializer, BusinessBranchSerializer
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsCommunityAdmin, IsBusinessOwnerOrAdmin
@@ -94,6 +94,10 @@ class BusinessApprovalView(APIView):
         if action == "approve":
             business.status = Business.APPROVED
             business.save()
+            first_branch = business.branches.first()
+            if first_branch:
+                first_branch.status = BusinessBranch.APPROVED
+                first_branch.save()
             owner = business.owner
             if owner and owner.role != "business owner":
                 owner.role = "business owner"
@@ -104,10 +108,65 @@ class BusinessApprovalView(APIView):
             business.status = Business.REJECTED
             business.rejection_reason = request.data.get("rejection_reason", "")
             business.save()
+            first_branch = business.branches.first()
+            if first_branch:
+                first_branch.status = BusinessBranch.REJECTED
+                first_branch.rejection_reason = business.rejection_reason
+                first_branch.save()
             return Response({"detail": "Business rejected."}, status=status.HTTP_200_OK)
 
         return Response(
             {"detail": "Invald action. Use 'approve' or 'reject'"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class BusinessBranchApprovalView(APIView):
+    permission_classes = [IsCommunityAdmin]
+
+    def get(self, request):
+        community = request.user.administered_communities.first()
+        if community is None:
+            return Response(
+                {"detail": "You are not an admin of any community."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        branches = BusinessBranch.objects.filter(
+            community=community, status=BusinessBranch.PENDING
+        )
+        serializer = BusinessBranchSerializer(branches, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, pk):
+        try:
+            branch = BusinessBranch.objects.get(pk=pk)
+        except BusinessBranch.DoesNotExist:
+            return Response(
+                {"detail": "Branch not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        community = request.user.administered_communities.first()
+        if community is None or branch.community != community:
+            return Response(
+                {"detail": "You are not authorized to review this branch."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        action = request.data.get("action")
+
+        if action == "approve":
+            branch.status = BusinessBranch.APPROVED
+            branch.save()
+            return Response({"detail": "Branch approved."}, status=status.HTTP_200_OK)
+
+        elif action == "reject":
+            branch.status = BusinessBranch.REJECTED
+            branch.rejection_reason = request.data.get("rejection_reason", "")
+            branch.save()
+            return Response({"detail": "Branch rejected."}, status=status.HTTP_200_OK)
+
+        return Response(
+            {"detail": "Invalid action. Use 'approve' or 'reject'."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 

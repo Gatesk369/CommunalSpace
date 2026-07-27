@@ -36,6 +36,16 @@ class Business(models.Model):
 
 
 class BusinessBranch(models.Model):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+    STATUS_CHOICES = (
+        (PENDING, "Pending"),
+        (APPROVED, "Approved"),
+        (REJECTED, "Rejected"),
+    )
+
     business = models.ForeignKey(
         Business, on_delete=models.CASCADE, related_name="branches"
     )
@@ -49,6 +59,8 @@ class BusinessBranch(models.Model):
     city = models.CharField(max_length=255)
     contact_phone = models.CharField(max_length=25)
     contact_email = models.EmailField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    rejection_reason = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
