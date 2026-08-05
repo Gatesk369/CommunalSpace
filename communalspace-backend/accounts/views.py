@@ -1,10 +1,13 @@
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from .models import User
-from .serializers import UserSerializer
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from .models import User
 from .permissions import IsAdmin, IsSelfOrAdmin
+from .serializers import UserSerializer
 
 
 # Create your views here.
@@ -90,3 +93,20 @@ class UserDeleteView(UserBaseView):
         self.check_object_permissions(request, user)
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get("refresh")
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {"detail": "Logged out successfully"}, status=status.HTTP_200_OK
+            )
+        except TokenError:
+            return Response(
+                {"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST
+            )
