@@ -1,11 +1,12 @@
+from accounts.permissions import IsAdmin, IsCommunityAdminOrAdmin
 from django.utils import timezone
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from .models import Community, CommunityAdminApplication
-from .serializers import CommunitySerializer, CommunityAdminApplicationSerializer
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from accounts.permissions import IsAdmin, IsCommunityAdminOrAdmin
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .models import Community, CommunityAdminApplication
+from .serializers import CommunityAdminApplicationSerializer, CommunitySerializer
 
 
 # Create your views here.

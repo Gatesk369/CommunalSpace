@@ -1,11 +1,12 @@
 from django.urls import path
+
 from .views import (
-    BusinessListDetailView,
-    BusinessCreateView,
-    BusinessUpdateView,
-    BusinessDeleteView,
     BusinessApprovalView,
     BusinessBranchApprovalView,
+    BusinessCreateView,
+    BusinessDeleteView,
+    BusinessListDetailView,
+    BusinessUpdateView,
 )
 
 urlpatterns = [

@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("businesses", "0004_business_community_business_rejection_reason_and_more"),
     ]

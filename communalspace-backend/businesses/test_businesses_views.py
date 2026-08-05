@@ -1,9 +1,10 @@
-from django.test import TestCase
-from django.urls import reverse
-from rest_framework.test import APIClient
-from rest_framework import status
 from accounts.models import User
 from communities.models import Community
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
+
 from businesses.models import Business, BusinessBranch
 
 

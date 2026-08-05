@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("communities", "0002_remove_community_admin_community_admins_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

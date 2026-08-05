@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("businesses", "0001_initial"),
         ("communities", "0001_initial"),

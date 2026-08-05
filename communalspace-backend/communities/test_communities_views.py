@@ -1,8 +1,9 @@
+from accounts.models import User
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
-from accounts.models import User
+from rest_framework.test import APIClient
+
 from communities.models import Community, CommunityAdminApplication
 
 

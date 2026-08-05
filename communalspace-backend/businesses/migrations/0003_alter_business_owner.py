@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("businesses", "0002_remove_business_address_remove_business_city_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
