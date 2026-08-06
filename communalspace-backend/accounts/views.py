@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.mail import send_mail
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -5,7 +7,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User
+from .models import EmailVerificationToken, PasswordResetToken, User
 from .permissions import IsAdmin, IsSelfOrAdmin
 from .serializers import UserSerializer
 
@@ -142,4 +144,89 @@ class UserChangePasswordView(APIView):
             token.blacklist()
         return Response(
             {"detail": "Password changed successfully"}, status=status.HTTP_200_OK
+        )
+
+
+class UserVerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        try:
+            verification_token = EmailVerificationToken.objects.get(token=token)
+        except EmailVerificationToken.DoesNotExist:
+            return Response(
+                {"detail": "Invalid or expired token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = verification_token.user
+        user.is_active = True
+        user.save()
+        verification_token.delete()
+        return Response(
+            {"detail": "Email verified successfully. You can now log in."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response(
+                {"detail": "Email is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # don't reveal if email exists or not
+            return Response(
+                {
+                    "detail": "If an account with that email exists, a reset link has been sent."
+                },
+                status=status.HTTP_200_OK,
+            )
+        token = PasswordResetToken.objects.create(user=user)
+        reset_link = f"http://localhost:8000/api/accounts/reset-password/{token.token}/"
+        send_mail(
+            subject="Reset your CommunalSpace password",
+            message=f"Hi {user.first_name},\n\nClick the link below to reset your password:\n\n{reset_link}\n\nIf you did not request this, ignore this email.\n\nThis link can only be used once.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+        )
+        return Response(
+            {
+                "detail": "If an account with that email exists, a reset link has been sent."
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        try:
+            reset_token = PasswordResetToken.objects.get(token=token, is_used=False)
+        except PasswordResetToken.DoesNotExist:
+            return Response(
+                {"detail": "Invalid or expired reset link."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        new_password = request.data.get("new_password")
+        if not new_password:
+            return Response(
+                {"detail": "New password is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = reset_token.user
+        user.set_password(new_password)
+        user.save()
+        reset_token.is_used = True
+        reset_token.save()
+        return Response(
+            {"detail": "Password reset successfully. You can now log in."},
+            status=status.HTTP_200_OK,
         )
