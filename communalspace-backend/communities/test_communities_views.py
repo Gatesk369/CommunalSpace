@@ -14,6 +14,7 @@ def create_user(email, role="resident", password="testpass123", **kwargs):
         first_name="Test",
         last_name="User",
         role=role,
+        is_active=True,  # bypass email verification in tests
         **kwargs,
     )
 
