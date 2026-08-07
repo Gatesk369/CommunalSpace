@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.mail import send_mail
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -10,6 +13,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import EmailVerificationToken, PasswordResetToken, User
 from .permissions import IsAdmin, IsSelfOrAdmin
 from .serializers import UserSerializer
+
+EMAIL_TOKEN_EXPIRY_HOURS = 24
+RESET_TOKEN_EXPIRY_MINUTES = 20
 
 
 # Create your views here.
@@ -158,6 +164,14 @@ class UserVerifyEmailView(APIView):
                 {"detail": "Invalid or expired token."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if verification_token.created_at < timezone.now() - timedelta(
+            hours=EMAIL_TOKEN_EXPIRY_HOURS
+        ):
+            verification_token.delete()
+            return Response(
+                {"detail": "Verification link has expired. Please register again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         user = verification_token.user
         user.is_active = True
         user.save()
@@ -219,6 +233,14 @@ class PasswordResetConfirmView(APIView):
         if not new_password:
             return Response(
                 {"detail": "New password is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if reset_token.created_at < timezone.now() - timedelta(
+            minutes=RESET_TOKEN_EXPIRY_MINUTES
+        ):
+            reset_token.delete()
+            return Response(
+                {"detail": "Reset link has expired. Please request a new one."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         user = reset_token.user
