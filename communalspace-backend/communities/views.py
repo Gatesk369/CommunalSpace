@@ -237,3 +237,46 @@ class CommunityAdminApplicationReviewView(APIView):
             {"detail": "Invalid action. Use 'approve' or 'reject'."},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+
+class CommunityJoinView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            community = Community.objects.get(pk=pk)
+        except Community.DoesNotExist:
+            return Response(
+                {"detail": "Community not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        request.user.community = community
+        request.user.save()
+        return Response(
+            {"detail": f"You have joined {community.name} successfully. Welcome home!"},
+            status=status.HTTP_200_OK,
+        )
+
+
+class CommunityLeaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            community = Community.objects.get(pk=pk)
+        except Community.DoesNotExist:
+            return Response(
+                {"detail": "Community not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if request.user.community != community:
+            return Response(
+                {"detail": "You are not a member of this community"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.community = None
+        request.user.save()
+        return Response(
+            {"detail": f"You have left {community.name}. We hope you had a nice stay."},
+            status=status.HTTP_200_OK,
+        )

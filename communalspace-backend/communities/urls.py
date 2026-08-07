@@ -6,6 +6,8 @@ from .views import (
     CommunityApplicationSeasonView,
     CommunityCreateView,
     CommunityDeleteView,
+    CommunityJoinView,
+    CommunityLeaveView,
     CommunityListDetailView,
     CommunityUpdateView,
 )
@@ -43,4 +45,6 @@ urlpatterns = [
         CommunityAdminApplicationReviewView.as_view(),
         name="community-application-review",
     ),
+    path("<int:pk>/leave/", CommunityLeaveView.as_view(), name="community-leave"),
+    path("<int:pk>/join/", CommunityJoinView.as_view(), name="community-join"),
 ]
