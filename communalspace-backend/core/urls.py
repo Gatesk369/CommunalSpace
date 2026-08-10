@@ -36,6 +36,7 @@ urlpatterns = [
                 path("accounts/", include("accounts.urls")),
                 path("businesses/", include("businesses.urls")),
                 path("communities/", include("communities.urls")),
+                path("posts/", include("posts.urls")),
             ]
         ),
     ),

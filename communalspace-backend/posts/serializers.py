@@ -7,13 +7,20 @@ class PostMediaSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostMedia
         fields = ["id", "file", "media_type", "file_size", "duration", "created_at"]
-        read_only_fields = ["created_at"]
+        read_only_fields = [
+            "id",
+            "media_type",
+            "file_size",
+            "duration",
+            "created_at",
+        ]
 
 
 class PostSerializer(serializers.ModelSerializer):
     media = PostMediaSerializer(many=True, read_only=True)
-    like_count = serializers.IntegerField(source="likes.count", read_only=True)
-    comment_count = serializers.IntegerField(source="comments.count", read_only=True)
+    like_count = serializers.IntegerField(read_only=True)
+    comment_count = serializers.IntegerField(read_only=True)
+    user_has_liked = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -28,17 +35,27 @@ class PostSerializer(serializers.ModelSerializer):
             "takedown_reason",
             "media",
             "like_count",
+            "user_has_liked",
             "comment_count",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
             "author",
+            "community",
             "status",
             "takedown_reason",
             "created_at",
             "updated_at",
         ]
+
+    def get_user_has_liked(self, obj):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return False
+
+        return obj.likes.filter(user=request.user).exists()
 
     def validate(self, data):
         request = self.context.get("request")
@@ -49,14 +66,54 @@ class PostSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "A post must have content or at least one media item."
             )
+        post_type = data.get("post_type")
+        branch = data.get("branch")
+
+        if post_type == Post.USER and branch:
+            raise serializers.ValidationError(
+                "User posts cannot belong to a business branch."
+            )
+
+        if post_type == Post.BUSINESS and not branch:
+            raise serializers.ValidationError(
+                "Business posts must specify a business branch."
+            )
         return data
 
 
 class CommentSerializer(serializers.ModelSerializer):
+    like_count = serializers.IntegerField(
+        source="likes.count",
+        read_only=True,
+    )
+    user_has_liked = serializers.SerializerMethodField()
+    reply_count = serializers.IntegerField(
+        source="replies.count",
+        read_only=True,
+    )
+
     class Meta:
         model = Comment
-        fields = ["id", "author", "post", "content", "is_active", "created_at"]
-        read_only_fields = ["author", "is_active", "created_at"]
+        fields = [
+            "id",
+            "author",
+            "post",
+            "content",
+            "is_active",
+            "like_count",
+            "user_has_liked",
+            "reply_count",
+            "created_at",
+        ]
+        read_only_fields = ["author", "post", "is_active", "created_at"]
+
+    def get_user_has_liked(self, obj):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return False
+
+        return obj.likes.filter(user=request.user).exists()
 
 
 class LikeSerializer(serializers.ModelSerializer):
