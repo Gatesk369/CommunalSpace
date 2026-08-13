@@ -6,7 +6,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Comment, CommentLike, Like, Post
+from .models import Comment, CommentLike, Like, Post, Report
 
 
 class PostAPITests(TestCase):
@@ -87,6 +87,36 @@ class PostAPITests(TestCase):
             community=self.community_1,
             post_type=Post.USER,
             content="Test post",
+        )
+        self.community_admin = User.objects.create_user(
+            email="commadmin@example.com",
+            password="password123",
+            first_name="Comm",
+            last_name="Admin",
+            role=User.COMMUNITY_ADMIN,
+            community=self.community_1,
+            is_active=True,
+        )
+        self.community_1.admins.add(self.community_admin)
+
+        self.community_admin_2 = User.objects.create_user(
+            email="commadmin2@example.com",
+            password="password123",
+            first_name="Comm2",
+            last_name="Admin",
+            role=User.COMMUNITY_ADMIN,
+            community=self.community_2,
+            is_active=True,
+        )
+        self.community_2.admins.add(self.community_admin_2)
+
+        self.platform_admin = User.objects.create_user(
+            email="platformadmin@example.com",
+            password="password123",
+            first_name="Platform",
+            last_name="Admin",
+            role=User.ADMIN,
+            is_active=True,
         )
 
     def authenticate(self, user=None):
@@ -599,3 +629,327 @@ class PostAPITests(TestCase):
                 comment=comment,
             ).exists()
         )
+
+    # ---------------------------------------------------------
+    # REPORT CREATE
+    # ---------------------------------------------------------
+
+    def test_report_create_requires_authentication(self):
+        response = self.client.post(
+            reverse("report-create"),
+            {"post": self.post.id, "reason": "spam"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_can_report_a_post(self):
+        self.authenticate(self.resident_2)
+
+        response = self.client.post(
+            reverse("report-create"),
+            {"post": self.post.id, "reason": "spam"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            Report.objects.filter(
+                reporter=self.resident_2,
+                post=self.post,
+                reason="spam",
+            ).exists()
+        )
+
+    def test_can_report_a_comment(self):
+        self.authenticate(self.resident_2)
+
+        comment = Comment.objects.create(
+            author=self.resident,
+            post=self.post,
+            content="Reportable comment",
+        )
+
+        response = self.client.post(
+            reverse("report-create"),
+            {"comment": comment.id, "reason": "abuse"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            Report.objects.filter(
+                reporter=self.resident_2,
+                comment=comment,
+                reason="abuse",
+            ).exists()
+        )
+
+    def test_report_requires_post_or_comment(self):
+        self.authenticate(self.resident_2)
+
+        response = self.client.post(
+            reverse("report-create"),
+            {"reason": "spam"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_report_cannot_target_both_post_and_comment(self):
+        self.authenticate(self.resident_2)
+
+        comment = Comment.objects.create(
+            author=self.resident,
+            post=self.post,
+            content="Some comment",
+        )
+
+        response = self.client.post(
+            reverse("report-create"),
+            {"post": self.post.id, "comment": comment.id, "reason": "spam"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # ---------------------------------------------------------
+    # REPORT QUEUE
+    # ---------------------------------------------------------
+
+    def test_resident_cannot_view_report_queue(self):
+        self.authenticate(self.resident)
+
+        response = self.client.get(reverse("report-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_community_admin_sees_only_their_community_reports(self):
+        Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        other_post = Post.objects.create(
+            author=self.resident_2,
+            community=self.community_2,
+            post_type=Post.USER,
+            content="Other community post",
+        )
+        Report.objects.create(
+            reporter=self.resident, post=other_post, reason=Report.ABUSE
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.get(reverse("report-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["post"], self.post.id)
+
+    def test_platform_admin_sees_all_reports(self):
+        Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        other_post = Post.objects.create(
+            author=self.resident_2,
+            community=self.community_2,
+            post_type=Post.USER,
+            content="Other community post",
+        )
+        Report.objects.create(
+            reporter=self.resident, post=other_post, reason=Report.ABUSE
+        )
+
+        self.authenticate(self.platform_admin)
+
+        response = self.client.get(reverse("report-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+
+    def test_report_queue_excludes_reviewed_reports(self):
+        Report.objects.create(
+            reporter=self.resident_2,
+            post=self.post,
+            reason=Report.SPAM,
+            is_reviewed=True,
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.get(reverse("report-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 0)
+
+    # ---------------------------------------------------------
+    # REPORT REVIEW
+    # ---------------------------------------------------------
+
+    def test_community_admin_can_dismiss_report(self):
+        report = Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "dismiss"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        report.refresh_from_db()
+        self.post.refresh_from_db()
+
+        self.assertTrue(report.is_reviewed)
+        self.assertIsNotNone(report.reviewed_at)
+        self.assertEqual(self.post.status, Post.ACTIVE)
+
+    def test_community_admin_can_remove_reported_post(self):
+        report = Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove", "takedown_reason": "Violates community guidelines"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        report.refresh_from_db()
+        self.post.refresh_from_db()
+
+        self.assertTrue(report.is_reviewed)
+        self.assertEqual(self.post.status, Post.REMOVED)
+        self.assertEqual(self.post.takedown_reason, "Violates community guidelines")
+
+    def test_remove_action_requires_takedown_reason(self):
+        report = Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        report.refresh_from_db()
+        self.assertFalse(report.is_reviewed)
+
+    def test_community_admin_can_remove_reported_comment(self):
+        comment = Comment.objects.create(
+            author=self.resident, post=self.post, content="Bad comment"
+        )
+        report = Report.objects.create(
+            reporter=self.resident_2, comment=comment, reason=Report.ABUSE
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove", "takedown_reason": "Abusive language"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        report.refresh_from_db()
+        comment.refresh_from_db()
+
+        self.assertTrue(report.is_reviewed)
+        self.assertFalse(comment.is_active)
+        self.assertEqual(comment.takedown_reason, "Abusive language")
+
+    def test_community_admin_cannot_review_report_outside_their_community(self):
+        report = Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin_2)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "dismiss"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        report.refresh_from_db()
+        self.assertFalse(report.is_reviewed)
+
+    def test_resident_cannot_review_reports(self):
+        report = Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.resident)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "dismiss"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_cannot_review_already_reviewed_report(self):
+        report = Report.objects.create(
+            reporter=self.resident_2,
+            post=self.post,
+            reason=Report.SPAM,
+            is_reviewed=True,
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "dismiss"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_action_rejected(self):
+        report = Report.objects.create(
+            reporter=self.resident_2, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "banish_to_the_shadow_realm"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        report.refresh_from_db()
+        self.assertFalse(report.is_reviewed)
+
+    def test_platform_admin_can_review_any_community_report(self):
+        other_post = Post.objects.create(
+            author=self.resident_2,
+            community=self.community_2,
+            post_type=Post.USER,
+            content="Other community post",
+        )
+        report = Report.objects.create(
+            reporter=self.resident, post=other_post, reason=Report.MISINFO
+        )
+
+        self.authenticate(self.platform_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove", "takedown_reason": "False information"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        other_post.refresh_from_db()
+        self.assertEqual(other_post.status, Post.REMOVED)

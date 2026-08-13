@@ -97,6 +97,7 @@ class Comment(models.Model):
         "self", on_delete=models.CASCADE, null=True, blank=True, related_name="replies"
     )
     content = models.TextField()
+    takedown_reason = models.TextField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

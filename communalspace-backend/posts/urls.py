@@ -12,6 +12,9 @@ from .views import (
     PostLikeView,
     PostListView,
     PostUpdateView,
+    ReportCreateView,
+    ReportListView,
+    ReportReviewView,
 )
 
 urlpatterns = [
@@ -34,4 +37,7 @@ urlpatterns = [
         name="comment-reply",
     ),
     path("comments/<int:pk>/like/", CommentLikeView.as_view(), name="comment-like"),
+    path("reports/", ReportListView.as_view(), name="report-list"),
+    path("reports/create/", ReportCreateView.as_view(), name="report-create"),
+    path("reports/<int:pk>/review/", ReportReviewView.as_view(), name="report-review"),
 ]

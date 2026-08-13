@@ -1,13 +1,16 @@
 from businesses.models import BusinessBranch
+from communities.models import Community
+from django.db import models
 from django.db.models import Count
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Comment, CommentLike, Like, Post, PostMedia
-from .serializers import CommentSerializer, PostSerializer
+from .models import Comment, CommentLike, Like, Post, PostMedia, Report
+from .serializers import CommentSerializer, PostSerializer, ReportSerializer
 
 
 # Create your views here.
@@ -502,3 +505,127 @@ class PostListView(APIView):
         )
 
         return paginator.get_paginated_response(serializer.data)
+
+
+class ReportCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ReportSerializer(data=request.data, context={"request": request})
+
+        if serializer.is_valid():
+            report = serializer.save(reporter=request.user)
+
+            return Response(
+                ReportSerializer(report, context={"request": request}).data,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class ReportListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.role == "admin":
+            reports = Report.objects.filter(is_reviewed=False)
+        elif user.role == "community admin":
+            admin_communities = Community.objects.filter(admins=user)
+            reports = Report.objects.filter(
+                is_reviewed=False,
+            ).filter(
+                models.Q(post__community__in=admin_communities)
+                | models.Q(comment__post__community__in=admin_communities)
+            )
+        else:
+            return Response(
+                {"detail": "You do not have permission to view reports."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        reports = reports.select_related(
+            "reporter", "post", "comment", "post__community", "comment__post__community"
+        ).order_by("created_at")
+
+        serializer = ReportSerializer(reports, many=True, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ReportReviewView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            report = Report.objects.select_related(
+                "post", "post__community", "comment", "comment__post__community"
+            ).get(pk=pk)
+        except Report.DoesNotExist:
+            return Response(
+                {"detail": "Report not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if report.is_reviewed:
+            return Response(
+                {"detail": "This report has already been reviewed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        target_community = (
+            report.post.community if report.post else report.comment.post.community
+        )
+
+        user = request.user
+
+        if user.role == "admin":
+            pass
+        elif user.role == "community admin":
+            if not Community.objects.filter(
+                id=target_community.id, admins=user
+            ).exists():
+                return Response(
+                    {"detail": "You do not administer this community."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        else:
+            return Response(
+                {"detail": "You do not have permission to review reports."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        action = request.data.get("action")
+
+        if action not in ("dismiss", "remove"):
+            return Response(
+                {"detail": "action must be 'dismiss' or 'remove'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if action == "remove":
+            takedown_reason = request.data.get("takedown_reason")
+            if not takedown_reason:
+                return Response(
+                    {"detail": "takedown_reason is required to remove a post."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if report.post:
+                report.post.status = Post.REMOVED
+                report.post.takedown_reason = takedown_reason
+                report.post.save()
+            else:
+                report.comment.is_active = False
+                report.comment.takedown_reason = takedown_reason
+                report.comment.save()
+
+        report.is_reviewed = True
+        report.reviewed_at = timezone.now()
+        report.save()
+
+        return Response(
+            ReportSerializer(report, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )

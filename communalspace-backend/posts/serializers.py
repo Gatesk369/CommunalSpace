@@ -100,12 +100,19 @@ class CommentSerializer(serializers.ModelSerializer):
             "post",
             "content",
             "is_active",
+            "takedown_reason",
             "like_count",
             "user_has_liked",
             "reply_count",
             "created_at",
         ]
-        read_only_fields = ["author", "post", "is_active", "created_at"]
+        read_only_fields = [
+            "author",
+            "post",
+            "is_active",
+            "takedown_reason",
+            "created_at",
+        ]
 
     def get_user_has_liked(self, obj):
         request = self.context.get("request")
