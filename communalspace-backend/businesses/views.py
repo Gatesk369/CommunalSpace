@@ -1,11 +1,16 @@
 from accounts.permissions import IsBusinessOwnerOrAdmin, IsCommunityAdmin
+from django.db.models import Avg, Count
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Business, BusinessBranch
-from .serializers import BusinessBranchSerializer, BusinessSerializer
+from .models import Business, BusinessBranch, BusinessRating
+from .serializers import (
+    BusinessBranchSerializer,
+    BusinessRatingSerializer,
+    BusinessSerializer,
+)
 
 
 # Create your views here.
@@ -21,19 +26,27 @@ class BusinessListDetailView(BusinessBaseView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk=None):
+        base_queryset = Business.objects.annotate(
+            avg_stars_raw=Avg("ratings__stars"),
+            rating_count=Count("ratings", distinct=True),
+        )
+
         if pk is None:
             if request.user.role == "community admin":
                 community = request.user.administered_communities.first()
-                businesses = Business.objects.filter(community=community)
+                businesses = base_queryset.filter(community=community)
             else:
-                businesses = Business.objects.filter(status=Business.APPROVED)
+                businesses = base_queryset.filter(status=Business.APPROVED)
             serializer = BusinessSerializer(businesses, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        business = self.get_object(pk)
-        if business is None:
+
+        try:
+            business = base_queryset.get(pk=pk)
+        except Business.DoesNotExist:
             return Response(
                 {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
             )
+
         if business.status != Business.APPROVED and request.user.role not in [
             "admin",
             "community admin",
@@ -214,3 +227,63 @@ class BusinessDeleteView(BusinessBaseView):
         self.check_object_permissions(request, business)
         business.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RateBusinessView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            business = Business.objects.get(pk=pk, status=Business.APPROVED)
+        except Business.DoesNotExist:
+            return Response(
+                {"detail": "Business not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        stars = request.data.get("stars")
+
+        try:
+            stars = int(stars)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "stars must be an integer between 1 and 10."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if stars < 1 or stars > 10:
+            return Response(
+                {"detail": "stars must be between 1 and 10."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rating, created = BusinessRating.objects.update_or_create(
+            business=business,
+            user=request.user,
+            defaults={"stars": stars},
+        )
+
+        return Response(
+            BusinessRatingSerializer(rating).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class UnrateBusinessView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        deleted, _ = BusinessRating.objects.filter(
+            business_id=pk, user=request.user
+        ).delete()
+
+        if not deleted:
+            return Response(
+                {"detail": "You haven't rated this business."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {"detail": "Rating removed."},
+            status=status.HTTP_200_OK,
+        )

@@ -7,6 +7,8 @@ from .views import (
     BusinessDeleteView,
     BusinessListDetailView,
     BusinessUpdateView,
+    RateBusinessView,
+    UnrateBusinessView,
 )
 
 urlpatterns = [
@@ -34,5 +36,11 @@ urlpatterns = [
         "branches/review/<int:pk>/",
         BusinessBranchApprovalView.as_view(),
         name="branch-review",
+    ),
+    path("businesses/<int:pk>/rate/", RateBusinessView.as_view(), name="business-rate"),
+    path(
+        "businesses/<int:pk>/rate/remove/",
+        UnrateBusinessView.as_view(),
+        name="business-unrate",
     ),
 ]

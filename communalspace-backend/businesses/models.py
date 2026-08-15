@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -78,3 +79,24 @@ class BusinessOwnerHistory(models.Model):
 
     def __str__(self):
         return f"{self.business.name} - {self.transferred_at}"
+
+
+class BusinessRating(models.Model):
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name="ratings"
+    )
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="business_ratings"
+    )
+    stars = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        help_text="1-10, representing 0.5 to 5.0 stars in half-star steps.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("business", "user")
+
+    def __str__(self):
+        return f"{self.user} rated {self.business.name} - {self.stars / 2} stars"

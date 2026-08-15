@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from businesses.models import Business, BusinessBranch
+from businesses.models import Business, BusinessBranch, BusinessRating
 
 
 def create_user(email, role="resident", password="testpass123", **kwargs):
@@ -432,3 +432,192 @@ class BusinessDeleteViewTest(TestCase):
         auth_client(self.client, token)
         response = self.client.delete(reverse("business-delete", args=[business.pk]))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class BusinessRatingViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.rater_1 = create_user("rater1@test.com", role="resident")
+        self.rater_2 = create_user("rater2@test.com", role="resident")
+        self.owner = create_user("owner@test.com", role="business owner")
+        self.community = create_community()
+        self.business = create_business(
+            name="Rateable Shop",
+            owner=self.owner,
+            community=self.community,
+            status=Business.APPROVED,
+        )
+        self.pending_business = create_business(
+            name="Pending Shop",
+            owner=self.owner,
+            community=self.community,
+            status=Business.PENDING,
+        )
+
+    # ---------------------------------------------------------
+    # RATE
+    # ---------------------------------------------------------
+
+    def test_unauthenticated_cannot_rate_business(self):
+        response = self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": 8},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_authenticated_user_can_rate_business(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": 8},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            BusinessRating.objects.filter(
+                business=self.business, user=self.rater_1, stars=8
+            ).exists()
+        )
+
+    def test_rating_again_updates_existing_rating_instead_of_duplicating(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+
+        self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": 6},
+            format="json",
+        )
+        response = self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": 10},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            BusinessRating.objects.filter(
+                business=self.business, user=self.rater_1
+            ).count(),
+            1,
+        )
+        rating = BusinessRating.objects.get(business=self.business, user=self.rater_1)
+        self.assertEqual(rating.stars, 10)
+
+    def test_cannot_rate_unapproved_business(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("business-rate", args=[self.pending_business.pk]),
+            {"stars": 8},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_rating_rejects_non_integer_input(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": "amazing"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rating_rejects_zero(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": 0},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rating_rejects_above_ten(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": 11},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # ---------------------------------------------------------
+    # UNRATE
+    # ---------------------------------------------------------
+
+    def test_user_can_unrate_business(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+
+        self.client.post(
+            reverse("business-rate", args=[self.business.pk]),
+            {"stars": 8},
+            format="json",
+        )
+        response = self.client.delete(
+            reverse("business-unrate", args=[self.business.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            BusinessRating.objects.filter(
+                business=self.business, user=self.rater_1
+            ).exists()
+        )
+
+    def test_unrating_without_existing_rating_returns_404(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.delete(
+            reverse("business-unrate", args=[self.business.pk])
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    # ---------------------------------------------------------
+    # AGGREGATION
+    # ---------------------------------------------------------
+
+    def test_business_detail_shows_no_rating_when_unrated(self):
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-detail", args=[self.business.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["average_rating"])
+        self.assertEqual(response.data["rating_count"], 0)
+
+    def test_business_detail_shows_correct_average_across_multiple_raters(self):
+        BusinessRating.objects.create(
+            business=self.business, user=self.rater_1, stars=8
+        )
+        BusinessRating.objects.create(
+            business=self.business, user=self.rater_2, stars=10
+        )
+
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-detail", args=[self.business.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # (8 + 10) / 2 = 9 -> 4.5 stars
+        self.assertEqual(response.data["average_rating"], 4.5)
+        self.assertEqual(response.data["rating_count"], 2)
+
+    def test_business_list_includes_rating_fields(self):
+        BusinessRating.objects.create(
+            business=self.business, user=self.rater_1, stars=9
+        )
+
+        token = get_token(self.client, "rater1@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rated = next(b for b in response.data if b["name"] == "Rateable Shop")
+        self.assertEqual(rated["average_rating"], 4.5)
+        self.assertEqual(rated["rating_count"], 1)
