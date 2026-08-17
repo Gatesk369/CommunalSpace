@@ -16,13 +16,11 @@ class IsSelfOrAdmin(BasePermission):
 
 
 class IsCommunityAdminOrAdmin(BasePermission):
-    """Only the community's admin or a platform admin can edit community"""
-
-    def has_object_permission(self, request, view, obj):
-        return (
-            request.user.role == "admin"
-            or obj.admins.filter(pk=request.user.pk).exists()
-        )
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in {
+            "admin",
+            "community admin",
+        }
 
 
 class IsBusinessOwnerOrAdmin(BasePermission):
