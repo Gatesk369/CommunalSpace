@@ -29,14 +29,15 @@ class AnnouncementCreateView(APIView):
 
         requested_communities = serializer.validated_data["communities"]
 
-        if user.role == "community admin":
-            if not _administers_all_communities(user, requested_communities):
-                return Response(
-                    {
-                        "detail": "You can only send announcements to communities you administer"
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        if user.role == "community admin" and not _administers_all_communities(
+            user, requested_communities
+        ):
+            return Response(
+                {
+                    "detail": "You can only send announcements to communities you administer"
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         announcement = serializer.save()
 
         return Response(
@@ -80,14 +81,15 @@ class AnnouncementDeleteView(APIView):
             return Response(
                 {"detail": "Announcement not found."}, status=status.HTTP_404_NOT_FOUND
             )
-        if user.role == "community admin":
-            if not _administers_all_communities(user, announcement.communities.all()):
-                return Response(
-                    {
-                        "detail": "You cannot delete an announcement that is from a community you do not administer."
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        if user.role == "community admin" and not _administers_all_communities(
+            user, announcement.communities.all()
+        ):
+            return Response(
+                {
+                    "detail": "You cannot delete an announcement that is from a community you do not administer."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         announcement.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -104,14 +106,15 @@ class AnnouncementUpdateView(APIView):
                 {"detail": "Announcement not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        if user.role == "community admin":
-            if not _administers_all_communities(user, announcement.communities.all()):
-                return Response(
-                    {
-                        "detail": "You cannot edit an announcement that is from a community you do not administer."
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        if user.role == "community admin" and not _administers_all_communities(
+            user, announcement.communities.all()
+        ):
+            return Response(
+                {
+                    "detail": "You cannot edit an announcement that is from a community you do not administer."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = AnnouncementSerializer(
             announcement,
             data=request.data,
