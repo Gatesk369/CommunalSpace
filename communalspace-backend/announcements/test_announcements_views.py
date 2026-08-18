@@ -38,9 +38,7 @@ class AnnouncementAPITests(TestCase):
         self.resident = create_user("resident@test.com", role="resident")
         self.platform_admin = create_user("platform@test.com", role="admin")
 
-        self.community_admin_1 = create_user(
-            "cadmin1@test.com", role="community admin"
-        )
+        self.community_admin_1 = create_user("cadmin1@test.com", role="community admin")
         self.community_admin_both = create_user(
             "cadminboth@test.com", role="community admin"
         )
