@@ -12,7 +12,7 @@ class Announcement(models.Model):
         (CRITICAL, "Critical"),
     )
     title = models.CharField(max_length=255)
-    content = models.TextField
+    content = models.TextField(default="")
     urgency = models.CharField(max_length=20, choices=URGENCY_CHOICES, default=INFO)
     communities = models.ManyToManyField(
         "communities.Community", related_name="announcements"

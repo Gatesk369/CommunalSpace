@@ -81,9 +81,10 @@ class AnnouncementDeleteView(APIView):
             return Response(
                 {"detail": "Announcement not found."}, status=status.HTTP_404_NOT_FOUND
             )
-        if user.role == "community admin" and not _administers_all_communities(
+        admin_communities = _administers_all_communities(
             user, announcement.communities.all()
-        ):
+        )
+        if user.role == "community admin" and not admin_communities:
             return Response(
                 {
                     "detail": "You cannot delete an announcement that is from a community you do not administer."
@@ -105,10 +106,10 @@ class AnnouncementUpdateView(APIView):
             return Response(
                 {"detail": "Announcement not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
-        if user.role == "community admin" and not _administers_all_communities(
+        admin_communities = _administers_all_communities(
             user, announcement.communities.all()
-        ):
+        )
+        if user.role == "community admin" and not admin_communities:
             return Response(
                 {
                     "detail": "You cannot edit an announcement that is from a community you do not administer."
