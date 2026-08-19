@@ -1,5 +1,6 @@
 from accounts.permissions import IsBusinessOwnerOrAdmin, IsCommunityAdmin
 from django.db.models import Avg, Count
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -116,6 +117,12 @@ class BusinessApprovalView(APIView):
             if owner and owner.role != "business owner":
                 owner.role = "business owner"
                 owner.save()
+            if owner:
+                Notification.objects.create(
+                    recipient=owner,
+                    notification_type="business_approval",
+                    message=f"Your business '{business.name}' was approved!",
+                )
             return Response({"detail": "Business approved."}, status=status.HTTP_200_OK)
 
         elif action == "reject":
@@ -127,6 +134,12 @@ class BusinessApprovalView(APIView):
                 first_branch.status = BusinessBranch.REJECTED
                 first_branch.rejection_reason = business.rejection_reason
                 first_branch.save()
+            if business.owner:
+                Notification.objects.create(
+                    recipient=business.owner,
+                    notification_type="business_approval",
+                    message=f"Your business '{business.name}' was rejected. Reason: {business.rejection_reason}",
+                )
             return Response({"detail": "Business rejected."}, status=status.HTTP_200_OK)
 
         return Response(

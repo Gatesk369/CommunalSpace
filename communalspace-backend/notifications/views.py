@@ -22,7 +22,7 @@ class NotificationMarkReadView(APIView):
 
     def patch(self, request, pk):
         try:
-            notification = Notification.objects.get(pk=pk)
+            notification = Notification.objects.get(pk=pk, recipient=request.user)
         except Notification.DoesNotExist:
             return Response(
                 {"detail": "Notification not found."}, status=status.HTTP_404_NOT_FOUND
