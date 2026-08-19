@@ -1,3 +1,4 @@
+from accounts.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -100,3 +101,23 @@ class BusinessRating(models.Model):
 
     def __str__(self):
         return f"{self.user} rated {self.business.name} - {self.stars / 2} stars"
+
+
+class Follow(models.Model):
+    follower = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="following"
+    )
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name="followers"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["follower", "business"], name="unique_follower_business"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.follower} followed {self.business.name}"

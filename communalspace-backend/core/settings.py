@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "businesses",
     "communities",
     "announcements",
+    "notifications",
     "posts",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
