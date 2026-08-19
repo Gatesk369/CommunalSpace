@@ -38,6 +38,7 @@ urlpatterns = [
                 path("communities/", include("communities.urls")),
                 path("posts/", include("posts.urls")),
                 path("announcements/", include("announcements.urls")),
+                path("notifications/", include("notifications.urls")),
             ]
         ),
     ),
