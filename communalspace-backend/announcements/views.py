@@ -1,4 +1,6 @@
+from accounts.models import User
 from accounts.permissions import IsCommunityAdminOrAdmin
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -39,6 +41,18 @@ class AnnouncementCreateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         announcement = serializer.save()
+
+        recipients = User.objects.filter(community__in=requested_communities).distinct()
+        Notification.objects.bulk_create(
+            [
+                Notification(
+                    recipient=recipient,
+                    notification_type="announcement",
+                    message=f"New announcement: [{announcement.urgency}] {announcement.title}",
+                )
+                for recipient in recipients
+            ]
+        )
 
         return Response(
             AnnouncementSerializer(announcement).data,

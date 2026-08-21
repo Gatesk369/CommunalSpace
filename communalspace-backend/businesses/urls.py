@@ -7,6 +7,7 @@ from .views import (
     BusinessDeleteView,
     BusinessListDetailView,
     BusinessUpdateView,
+    FollowToggleView,
     RateBusinessView,
     UnrateBusinessView,
 )
@@ -42,5 +43,10 @@ urlpatterns = [
         "businesses/<int:pk>/rate/remove/",
         UnrateBusinessView.as_view(),
         name="business-unrate",
+    ),
+    path(
+        "businesses/<int:pk>/follow/",
+        FollowToggleView.as_view(),
+        name="business-follow",
     ),
 ]

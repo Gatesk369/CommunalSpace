@@ -3,6 +3,7 @@ from communities.models import Community
 from django.db import models
 from django.db.models import Count
 from django.utils import timezone
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
@@ -616,10 +617,42 @@ class ReportReviewView(APIView):
                 report.post.status = Post.REMOVED
                 report.post.takedown_reason = takedown_reason
                 report.post.save()
+                content_author = report.post.author
+                content_label = "post"
             else:
                 report.comment.is_active = False
                 report.comment.takedown_reason = takedown_reason
                 report.comment.save()
+                content_author = report.comment.author
+                content_label = "comment"
+
+            target_filter = (
+                {"post": report.post} if report.post else {"comment": report.comment}
+            )
+            other_reports = Report.objects.filter(
+                is_reviewed=False, **target_filter
+            ).exclude(pk=report.pk)
+            other_reporters = [r.reporter for r in other_reports if r.reporter]
+            other_reports.update(is_reviewed=True, reviewed_at=timezone.now())
+
+            if report.reporter:
+                Notification.objects.create(
+                    recipient=report.reporter,
+                    notification_type="report_outcome",
+                    message="Your report was reviewed and the content was taken down.",
+                )
+            for reporter in other_reporters:
+                Notification.objects.create(
+                    recipient=reporter,
+                    notification_type="report_outcome",
+                    message="Your report was reviewed and the content was taken down.",
+                )
+            if content_author:
+                Notification.objects.create(
+                    recipient=content_author,
+                    notification_type="report_outcome",
+                    message=f"Your {content_label} was removed. Reason: {takedown_reason}",
+                )
 
         report.is_reviewed = True
         report.reviewed_at = timezone.now()

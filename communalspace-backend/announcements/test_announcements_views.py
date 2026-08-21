@@ -2,6 +2,7 @@ from accounts.models import User
 from communities.models import Community
 from django.test import TestCase
 from django.urls import reverse
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -423,3 +424,163 @@ class AnnouncementAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AnnouncementNotificationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.community_admin_1 = create_user("cadmin1@test.com", role="community admin")
+        self.community_1 = create_community(
+            "Community One", admins=[self.community_admin_1]
+        )
+        self.community_2 = create_community("Community Two")
+
+        self.member_1 = create_user(
+            "member1@test.com", role="resident", community=self.community_1
+        )
+        self.member_2 = create_user(
+            "member2@test.com", role="resident", community=self.community_1
+        )
+        self.outside_member = create_user(
+            "outside@test.com", role="resident", community=self.community_2
+        )
+        self.communityless_user = create_user("nocommunity@test.com", role="resident")
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def test_creating_announcement_notifies_community_members(self):
+        self.authenticate(self.community_admin_1)
+
+        response = self.client.post(
+            reverse("announcement-create"),
+            {
+                "title": "Water outage",
+                "content": "Water will be shut off tomorrow.",
+                "urgency": Announcement.WARNING,
+                "communities": [self.community_1.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.member_1, notification_type="announcement"
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.member_2, notification_type="announcement"
+            ).exists()
+        )
+
+    def test_notification_message_includes_title(self):
+        self.authenticate(self.community_admin_1)
+
+        self.client.post(
+            reverse("announcement-create"),
+            {
+                "title": "Water outage",
+                "content": "Water will be shut off tomorrow.",
+                "urgency": Announcement.WARNING,
+                "communities": [self.community_1.id],
+            },
+            format="json",
+        )
+
+        notification = Notification.objects.get(
+            recipient=self.member_1, notification_type="announcement"
+        )
+        self.assertIn("Water outage", notification.message)
+
+    def test_members_outside_targeted_community_not_notified(self):
+        self.authenticate(self.community_admin_1)
+
+        self.client.post(
+            reverse("announcement-create"),
+            {
+                "title": "Water outage",
+                "content": "Water will be shut off tomorrow.",
+                "urgency": Announcement.WARNING,
+                "communities": [self.community_1.id],
+            },
+            format="json",
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.outside_member, notification_type="announcement"
+            ).exists()
+        )
+
+    def test_users_with_no_community_not_notified(self):
+        self.authenticate(self.community_admin_1)
+
+        self.client.post(
+            reverse("announcement-create"),
+            {
+                "title": "Water outage",
+                "content": "Water will be shut off tomorrow.",
+                "urgency": Announcement.WARNING,
+                "communities": [self.community_1.id],
+            },
+            format="json",
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.communityless_user, notification_type="announcement"
+            ).exists()
+        )
+
+    def test_member_in_multiple_targeted_communities_notified_once(self):
+        community_admin_both = create_user(
+            "cadminboth@test.com", role="community admin"
+        )
+        self.community_1.admins.add(community_admin_both)
+        self.community_2.admins.add(community_admin_both)
+
+        dual_member = create_user(
+            "dual@test.com", role="resident", community=self.community_1
+        )
+
+        self.authenticate(community_admin_both)
+
+        self.client.post(
+            reverse("announcement-create"),
+            {
+                "title": "Multi-community notice",
+                "content": "Applies to both.",
+                "urgency": Announcement.INFO,
+                "communities": [self.community_1.id, self.community_2.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=dual_member, notification_type="announcement"
+            ).count(),
+            1,
+        )
+
+    def test_failed_creation_does_not_notify_anyone(self):
+        self.authenticate(self.community_admin_1)
+
+        response = self.client.post(
+            reverse("announcement-create"),
+            {
+                "title": "Sneaky announcement",
+                "content": "Shouldn't be allowed.",
+                "urgency": Announcement.CRITICAL,
+                "communities": [self.community_1.id, self.community_2.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            Notification.objects.filter(notification_type="announcement").exists()
+        )

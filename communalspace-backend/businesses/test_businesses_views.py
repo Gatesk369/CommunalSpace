@@ -2,10 +2,11 @@ from accounts.models import User
 from communities.models import Community
 from django.test import TestCase
 from django.urls import reverse
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from businesses.models import Business, BusinessBranch, BusinessRating
+from businesses.models import Business, BusinessBranch, BusinessRating, Follow
 
 
 def create_user(email, role="resident", password="testpass123", **kwargs):
@@ -621,3 +622,105 @@ class BusinessRatingViewTest(TestCase):
         rated = next(b for b in response.data if b["name"] == "Rateable Shop")
         self.assertEqual(rated["average_rating"], 4.5)
         self.assertEqual(rated["rating_count"], 1)
+
+
+class FollowToggleViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.follower = create_user("follower@test.com", role="resident")
+        self.owner = create_user("owner@test.com", role="business owner")
+        self.community = create_community()
+        self.business = create_business(
+            name="Followable Shop",
+            owner=self.owner,
+            community=self.community,
+            status=Business.APPROVED,
+        )
+        self.pending_business = create_business(
+            name="Pending Shop",
+            owner=self.owner,
+            community=self.community,
+            status=Business.PENDING,
+        )
+
+    def test_unauthenticated_cannot_follow(self):
+        response = self.client.post(reverse("business-follow", args=[self.business.pk]))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_authenticated_user_can_follow_business(self):
+        token = get_token(self.client, "follower@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(reverse("business-follow", args=[self.business.pk]))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            Follow.objects.filter(
+                follower=self.follower, business=self.business
+            ).exists()
+        )
+
+    def test_following_again_unfollows(self):
+        token = get_token(self.client, "follower@test.com")
+        auth_client(self.client, token)
+        self.client.post(reverse("business-follow", args=[self.business.pk]))
+        response = self.client.post(reverse("business-follow", args=[self.business.pk]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            Follow.objects.filter(
+                follower=self.follower, business=self.business
+            ).exists()
+        )
+
+    def test_cannot_follow_unapproved_business(self):
+        token = get_token(self.client, "follower@test.com")
+        auth_client(self.client, token)
+        response = self.client.post(
+            reverse("business-follow", args=[self.pending_business.pk])
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class FollowNotificationTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.follower = create_user("follower@test.com", role="resident")
+        self.owner = create_user("owner@test.com", role="business owner")
+        self.community = create_community()
+        self.business = create_business(
+            name="Followable Shop",
+            owner=self.owner,
+            community=self.community,
+            status=Business.APPROVED,
+        )
+
+    def test_following_notifies_business_owner(self):
+        token = get_token(self.client, "follower@test.com")
+        auth_client(self.client, token)
+        self.client.post(reverse("business-follow", args=[self.business.pk]))
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.owner, notification_type="new_follower"
+            ).exists()
+        )
+
+    def test_unfollowing_does_not_notify(self):
+        token = get_token(self.client, "follower@test.com")
+        auth_client(self.client, token)
+        self.client.post(reverse("business-follow", args=[self.business.pk]))
+        Notification.objects.filter(notification_type="new_follower").delete()
+
+        self.client.post(
+            reverse("business-follow", args=[self.business.pk])
+        )  # unfollow
+
+        self.assertFalse(
+            Notification.objects.filter(notification_type="new_follower").exists()
+        )
+
+    def test_notification_message_includes_business_name(self):
+        token = get_token(self.client, "follower@test.com")
+        auth_client(self.client, token)
+        self.client.post(reverse("business-follow", args=[self.business.pk]))
+        notification = Notification.objects.get(
+            recipient=self.owner, notification_type="new_follower"
+        )
+        self.assertIn("Followable Shop", notification.message)

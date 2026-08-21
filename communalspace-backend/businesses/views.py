@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Business, BusinessBranch, BusinessRating
+from .models import Business, BusinessBranch, BusinessRating, Follow
 from .serializers import (
     BusinessBranchSerializer,
     BusinessRatingSerializer,
@@ -299,4 +299,39 @@ class UnrateBusinessView(APIView):
         return Response(
             {"detail": "Rating removed."},
             status=status.HTTP_200_OK,
+        )
+
+
+class FollowToggleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            business = Business.objects.get(pk=pk, status=Business.APPROVED)
+        except Business.DoesNotExist:
+            return Response(
+                {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        follow = Follow.objects.filter(follower=request.user, business=business).first()
+
+        if follow:
+            follow.delete()
+            return Response(
+                {"detail": "Unfollowed.", "following": False},
+                status=status.HTTP_200_OK,
+            )
+
+        Follow.objects.create(follower=request.user, business=business)
+
+        if business.owner:
+            Notification.objects.create(
+                recipient=business.owner,
+                notification_type="new_follower",
+                message=f"{request.user.first_name} started following {business.name}.",
+            )
+
+        return Response(
+            {"detail": "Followed.", "following": True},
+            status=status.HTTP_201_CREATED,
         )

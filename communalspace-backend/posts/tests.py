@@ -3,6 +3,7 @@ from businesses.models import Business, BusinessBranch
 from communities.models import Community
 from django.test import TestCase
 from django.urls import reverse
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -953,3 +954,182 @@ class PostAPITests(TestCase):
 
         other_post.refresh_from_db()
         self.assertEqual(other_post.status, Post.REMOVED)
+
+
+class ReportNotificationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.community_1 = Community.objects.create(
+            name="Community One",
+            city="Kampala",
+            address="Address One",
+        )
+
+        self.resident = User.objects.create_user(
+            email="reporter@example.com",
+            password="password123",
+            first_name="Reporter",
+            last_name="One",
+            role=User.RESIDENT,
+            community=self.community_1,
+            is_active=True,
+        )
+
+        self.other_reporter = User.objects.create_user(
+            email="reporter2@example.com",
+            password="password123",
+            first_name="Reporter",
+            last_name="Two",
+            role=User.RESIDENT,
+            community=self.community_1,
+            is_active=True,
+        )
+
+        self.post_author = User.objects.create_user(
+            email="postauthor@example.com",
+            password="password123",
+            first_name="Post",
+            last_name="Author",
+            role=User.RESIDENT,
+            community=self.community_1,
+            is_active=True,
+        )
+
+        self.community_admin = User.objects.create_user(
+            email="commadmin@example.com",
+            password="password123",
+            first_name="Comm",
+            last_name="Admin",
+            role=User.COMMUNITY_ADMIN,
+            community=self.community_1,
+            is_active=True,
+        )
+        self.community_1.admins.add(self.community_admin)
+
+        self.post = Post.objects.create(
+            author=self.post_author,
+            community=self.community_1,
+            post_type=Post.USER,
+            content="Reported content",
+        )
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    def test_dismiss_does_not_notify_reporter(self):
+        report = Report.objects.create(
+            reporter=self.resident, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "dismiss"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.resident, notification_type="report_outcome"
+            ).exists()
+        )
+
+    def test_remove_notifies_reporter(self):
+        report = Report.objects.create(
+            reporter=self.resident, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        response = self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove", "takedown_reason": "Violates guidelines"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.resident, notification_type="report_outcome"
+            ).exists()
+        )
+
+    def test_remove_notifies_content_author(self):
+        report = Report.objects.create(
+            reporter=self.resident, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove", "takedown_reason": "Violates guidelines"},
+        )
+
+        notification = Notification.objects.filter(
+            recipient=self.post_author, notification_type="report_outcome"
+        ).first()
+
+        self.assertIsNotNone(notification)
+        self.assertIn("Violates guidelines", notification.message)
+
+    def test_remove_auto_reviews_other_reports_on_same_post(self):
+        report_1 = Report.objects.create(
+            reporter=self.resident, post=self.post, reason=Report.SPAM
+        )
+        report_2 = Report.objects.create(
+            reporter=self.other_reporter, post=self.post, reason=Report.ABUSE
+        )
+
+        self.authenticate(self.community_admin)
+
+        self.client.patch(
+            reverse("report-review", kwargs={"pk": report_1.id}),
+            {"action": "remove", "takedown_reason": "Violates guidelines"},
+        )
+
+        report_2.refresh_from_db()
+
+        self.assertTrue(report_2.is_reviewed)
+        self.assertIsNotNone(report_2.reviewed_at)
+
+    def test_remove_notifies_other_reporters(self):
+        report_1 = Report.objects.create(
+            reporter=self.resident, post=self.post, reason=Report.SPAM
+        )
+        Report.objects.create(
+            reporter=self.other_reporter, post=self.post, reason=Report.ABUSE
+        )
+
+        self.authenticate(self.community_admin)
+
+        self.client.patch(
+            reverse("report-review", kwargs={"pk": report_1.id}),
+            {"action": "remove", "takedown_reason": "Violates guidelines"},
+        )
+
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.other_reporter, notification_type="report_outcome"
+            ).exists()
+        )
+
+    def test_dismiss_does_not_auto_review_other_reports(self):
+        report_1 = Report.objects.create(
+            reporter=self.resident, post=self.post, reason=Report.SPAM
+        )
+        report_2 = Report.objects.create(
+            reporter=self.other_reporter, post=self.post, reason=Report.ABUSE
+        )
+
+        self.authenticate(self.community_admin)
+
+        self.client.patch(
+            reverse("report-review", kwargs={"pk": report_1.id}),
+            {"action": "dismiss"},
+        )
+
+        report_2.refresh_from_db()
+
+        self.assertFalse(report_2.is_reviewed)

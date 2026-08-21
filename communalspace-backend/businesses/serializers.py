@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from .models import Business, BusinessBranch, BusinessRating
+from .models import Business, BusinessBranch, BusinessRating, Follow
 
 
 class BusinessBranchSerializer(ModelSerializer):
@@ -63,3 +63,10 @@ class BusinessRatingSerializer(ModelSerializer):
         model = BusinessRating
         fields = ["id", "business", "user", "stars", "created_at", "updated_at"]
         read_only_fields = ["user", "created_at", "updated_at"]
+
+
+class FollowSerializer(ModelSerializer):
+    class Meta:
+        model = Follow
+        fields = ["id", "follower", "business", "created_at"]
+        read_only_fields = ["follower", "created_at"]
