@@ -15,7 +15,26 @@ class Business(models.Model):
         (REJECTED, "Rejected"),
     )
 
+    FOOD_AND_DINING = "food_and_dining"
+    RETAIL_AND_SHOPPING = "retail_and_shopping"
+    HEALTH_AND_WELLNESS = "health_and_wellness"
+    HOME_AND_REPAIR_SERVICES = "home_and_repair_services"
+    PROFESSIONAL_SERVICES = "professional_services"
+    EDUCATION = "education"
+    OTHER = "other"
+
+    CATEGORY_CHOICES = (
+        (FOOD_AND_DINING, "Food & Dining"),
+        (RETAIL_AND_SHOPPING, "Retail & Shopping"),
+        (HEALTH_AND_WELLNESS, "Health & Wellness"),
+        (HOME_AND_REPAIR_SERVICES, "Home & Repair Services"),
+        (PROFESSIONAL_SERVICES, "Professional Services"),
+        (EDUCATION, "Education"),
+        (OTHER, "Other"),
+    )
+
     name = models.CharField(max_length=255)
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default=OTHER)
     owner = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,

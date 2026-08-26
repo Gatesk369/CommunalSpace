@@ -29,6 +29,7 @@ class BusinessSerializer(ModelSerializer):
         fields = [
             "id",
             "name",
+            "category",
             "owner",
             "community",
             "status",

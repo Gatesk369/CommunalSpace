@@ -738,3 +738,176 @@ class FollowNotificationTest(TestCase):
             recipient=self.owner, notification_type=Notification.NEW_FOLLOWER
         )
         self.assertEqual(notification.business, self.business)
+
+
+class BusinessDiscoveryFilterTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.community_1 = create_community(name="Community One")
+        self.community_2 = create_community(name="Community Two")
+
+        self.resident = create_user(
+            "resident@test.com", role="resident", community=self.community_1
+        )
+        self.communityless_resident = create_user(
+            "nocommunity@test.com", role="resident"
+        )
+
+        self.owner = create_user("owner@test.com", role="business owner")
+
+        # Business with an approved branch in community_1 ("near" the resident)
+        self.nearby_business = create_business(
+            name="Nearby Cafe",
+            owner=self.owner,
+            community=self.community_1,
+            status=Business.APPROVED,
+        )
+        self.nearby_business.category = Business.FOOD_AND_DINING
+        self.nearby_business.save()
+        BusinessBranch.objects.create(
+            business=self.nearby_business,
+            community=self.community_1,
+            address="1 Near St",
+            city="Kampala",
+            contact_phone="0700000001",
+            contact_email="nearby@test.com",
+            status=BusinessBranch.APPROVED,
+        )
+
+        # Business with an approved branch only in community_2 (far from the resident)
+        self.far_business = create_business(
+            name="Far Shop",
+            owner=self.owner,
+            community=self.community_2,
+            status=Business.APPROVED,
+        )
+        self.far_business.category = Business.RETAIL_AND_SHOPPING
+        self.far_business.save()
+        BusinessBranch.objects.create(
+            business=self.far_business,
+            community=self.community_2,
+            address="1 Far St",
+            city="Jinja",
+            contact_phone="0700000002",
+            contact_email="far@test.com",
+            status=BusinessBranch.APPROVED,
+        )
+
+        # Business whose branch in community_1 is still pending (not approved)
+        self.pending_branch_business = create_business(
+            name="Pending Branch Shop",
+            owner=self.owner,
+            community=self.community_1,
+            status=Business.APPROVED,
+        )
+        BusinessBranch.objects.create(
+            business=self.pending_branch_business,
+            community=self.community_1,
+            address="1 Pending St",
+            city="Kampala",
+            contact_phone="0700000003",
+            contact_email="pending@test.com",
+            status=BusinessBranch.PENDING,
+        )
+
+    def test_default_list_shows_only_near_you(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [b["name"] for b in response.data]
+        self.assertIn("Nearby Cafe", names)
+        self.assertNotIn("Far Shop", names)
+
+    def test_business_with_only_pending_branch_in_community_excluded(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-list"))
+
+        names = [b["name"] for b in response.data]
+        self.assertNotIn("Pending Branch Shop", names)
+
+    def test_scope_all_shows_everyone(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-list"), {"scope": "all"})
+
+        names = [b["name"] for b in response.data]
+        self.assertIn("Nearby Cafe", names)
+        self.assertIn("Far Shop", names)
+
+    def test_filter_by_specific_community_id(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("business-list"), {"community": self.community_2.id}
+        )
+
+        names = [b["name"] for b in response.data]
+        self.assertIn("Far Shop", names)
+        self.assertNotIn("Nearby Cafe", names)
+
+    def test_category_filter(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("business-list"),
+            {"scope": "all", "category": Business.RETAIL_AND_SHOPPING},
+        )
+
+        names = [b["name"] for b in response.data]
+        self.assertIn("Far Shop", names)
+        self.assertNotIn("Nearby Cafe", names)
+
+    def test_category_filter_combined_with_near_you(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("business-list"), {"category": Business.RETAIL_AND_SHOPPING}
+        )
+
+        # Far Shop matches the category but isn't "near" the resident
+        names = [b["name"] for b in response.data]
+        self.assertNotIn("Far Shop", names)
+        self.assertEqual(len(response.data), 0)
+
+    def test_user_with_no_community_sees_everyone_by_default(self):
+        token = get_token(self.client, "nocommunity@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-list"))
+
+        names = [b["name"] for b in response.data]
+        self.assertIn("Nearby Cafe", names)
+        self.assertIn("Far Shop", names)
+
+    def test_rating_aggregation_correct_with_multiple_branches_in_community(self):
+        # Give the nearby business a second approved branch in the same community
+        BusinessBranch.objects.create(
+            business=self.nearby_business,
+            community=self.community_1,
+            address="2 Near St",
+            city="Kampala",
+            contact_phone="0700000004",
+            contact_email="nearby2@test.com",
+            status=BusinessBranch.APPROVED,
+        )
+
+        rater_1 = create_user("rater1@test.com", role="resident")
+        rater_2 = create_user("rater2@test.com", role="resident")
+        BusinessRating.objects.create(
+            business=self.nearby_business, user=rater_1, stars=8
+        )
+        BusinessRating.objects.create(
+            business=self.nearby_business, user=rater_2, stars=10
+        )
+
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-list"))
+
+        nearby = next(b for b in response.data if b["name"] == "Nearby Cafe")
+        # (8 + 10) / 2 = 9 -> 4.5 stars, unaffected by the second branch join
+        self.assertEqual(nearby["average_rating"], 4.5)
+        self.assertEqual(nearby["rating_count"], 2)

@@ -38,6 +38,25 @@ class BusinessListDetailView(BusinessBaseView):
                 businesses = base_queryset.filter(community=community)
             else:
                 businesses = base_queryset.filter(status=Business.APPROVED)
+
+                community_id = request.query_params.get("community")
+                scope = request.query_params.get("scope")
+
+                if community_id:
+                    businesses = businesses.filter(
+                        branches__community_id=community_id,
+                        branches__status=BusinessBranch.APPROVED,
+                    ).distinct()
+                elif scope != "all" and request.user.community_id:
+                    businesses = businesses.filter(
+                        branches__community_id=request.user.community_id,
+                        branches__status=BusinessBranch.APPROVED,
+                    ).distinct()
+
+            category = request.query_params.get("category")
+            if category:
+                businesses = businesses.filter(category=category)
+
             serializer = BusinessSerializer(businesses, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
