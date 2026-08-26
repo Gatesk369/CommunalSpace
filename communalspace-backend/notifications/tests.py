@@ -304,9 +304,7 @@ class TestNotificationFKTargets:
 
 
 @pytest.mark.django_db
-def test_regrouped_notification_moves_to_top(
-    self, api_client, user, other_user, community
-):
+def test_regrouped_notification_moves_to_top(api_client, user, other_user, community):
     from posts.models import Post
 
     older = Notification.objects.create(
