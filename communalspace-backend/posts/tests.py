@@ -1032,7 +1032,7 @@ class ReportNotificationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(
             Notification.objects.filter(
-                recipient=self.resident, notification_type="report_outcome"
+                recipient=self.resident, notification_type=Notification.REPORT_OUTCOME
             ).exists()
         )
 
@@ -1051,7 +1051,7 @@ class ReportNotificationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.resident, notification_type="report_outcome"
+                recipient=self.resident, notification_type=Notification.REPORT_OUTCOME
             ).exists()
         )
 
@@ -1068,7 +1068,7 @@ class ReportNotificationTests(TestCase):
         )
 
         notification = Notification.objects.filter(
-            recipient=self.post_author, notification_type="report_outcome"
+            recipient=self.post_author, notification_type=Notification.REPORT_OUTCOME
         ).first()
 
         self.assertIsNotNone(notification)
@@ -1111,7 +1111,8 @@ class ReportNotificationTests(TestCase):
 
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.other_reporter, notification_type="report_outcome"
+                recipient=self.other_reporter,
+                notification_type=Notification.REPORT_OUTCOME,
             ).exists()
         )
 
@@ -1133,3 +1134,360 @@ class ReportNotificationTests(TestCase):
         report_2.refresh_from_db()
 
         self.assertFalse(report_2.is_reviewed)
+
+    def test_remove_notification_has_post_fk(self):
+        report = Report.objects.create(
+            reporter=self.resident, post=self.post, reason=Report.SPAM
+        )
+
+        self.authenticate(self.community_admin)
+
+        self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove", "takedown_reason": "Violates guidelines"},
+        )
+
+        notification = Notification.objects.get(
+            recipient=self.resident, notification_type=Notification.REPORT_OUTCOME
+        )
+        self.assertEqual(notification.post, self.post)
+        self.assertIsNone(notification.comment)
+
+    def test_remove_notification_has_comment_fk_for_comment_reports(self):
+        comment = Comment.objects.create(
+            author=self.post_author, post=self.post, content="Bad comment"
+        )
+        report = Report.objects.create(
+            reporter=self.resident, comment=comment, reason=Report.ABUSE
+        )
+
+        self.authenticate(self.community_admin)
+
+        self.client.patch(
+            reverse("report-review", kwargs={"pk": report.id}),
+            {"action": "remove", "takedown_reason": "Abusive"},
+        )
+
+        notification = Notification.objects.get(
+            recipient=self.resident, notification_type=Notification.REPORT_OUTCOME
+        )
+        self.assertEqual(notification.comment, comment)
+        self.assertIsNone(notification.post)
+
+
+class LikeCommentNotificationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.community_1 = Community.objects.create(
+            name="Community One",
+            city="Kampala",
+            address="Address One",
+        )
+
+        self.post_author = User.objects.create_user(
+            email="postauthor@example.com",
+            password="password123",
+            first_name="Post",
+            last_name="Author",
+            role=User.RESIDENT,
+            community=self.community_1,
+            is_active=True,
+        )
+
+        self.liker_1 = User.objects.create_user(
+            email="liker1@example.com",
+            password="password123",
+            first_name="Liker",
+            last_name="One",
+            role=User.RESIDENT,
+            community=self.community_1,
+            is_active=True,
+        )
+
+        self.liker_2 = User.objects.create_user(
+            email="liker2@example.com",
+            password="password123",
+            first_name="Liker",
+            last_name="Two",
+            role=User.RESIDENT,
+            community=self.community_1,
+            is_active=True,
+        )
+
+        self.commenter = User.objects.create_user(
+            email="commenter@example.com",
+            password="password123",
+            first_name="Commenter",
+            last_name="One",
+            role=User.RESIDENT,
+            community=self.community_1,
+            is_active=True,
+        )
+
+        self.post = Post.objects.create(
+            author=self.post_author,
+            community=self.community_1,
+            post_type=Post.USER,
+            content="Test post",
+        )
+
+    def authenticate(self, user):
+        self.client.force_authenticate(user=user)
+
+    # ---------------------------------------------------------
+    # LIKE NOTIFICATIONS
+    # ---------------------------------------------------------
+
+    def test_liking_post_notifies_author(self):
+        self.authenticate(self.liker_1)
+
+        response = self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        notification = Notification.objects.filter(
+            recipient=self.post_author,
+            notification_type=Notification.LIKE,
+            post=self.post,
+        ).first()
+
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.actor, self.liker_1)
+        self.assertEqual(notification.actor_count, 1)
+
+    def test_self_like_does_not_notify(self):
+        self.authenticate(self.post_author)
+
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.post_author, notification_type=Notification.LIKE
+            ).exists()
+        )
+
+    def test_unliking_does_not_delete_notification(self):
+        self.authenticate(self.liker_1)
+
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))  # unlike
+
+        self.assertTrue(
+            Notification.objects.filter(
+                recipient=self.post_author, notification_type=Notification.LIKE
+            ).exists()
+        )
+
+    def test_second_like_groups_into_existing_notification(self):
+        self.authenticate(self.liker_1)
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+
+        self.authenticate(self.liker_2)
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+
+        notifications = Notification.objects.filter(
+            recipient=self.post_author,
+            notification_type=Notification.LIKE,
+            post=self.post,
+        )
+
+        self.assertEqual(notifications.count(), 1)
+
+        notification = notifications.first()
+        self.assertEqual(notification.actor, self.liker_2)
+        self.assertEqual(notification.actor_count, 2)
+
+    def test_like_after_read_starts_new_group(self):
+        self.authenticate(self.liker_1)
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+
+        notification = Notification.objects.get(
+            recipient=self.post_author,
+            notification_type=Notification.LIKE,
+            post=self.post,
+        )
+        notification.is_read = True
+        notification.save()
+
+        self.authenticate(self.liker_2)
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+
+        notifications = Notification.objects.filter(
+            recipient=self.post_author,
+            notification_type=Notification.LIKE,
+            post=self.post,
+        )
+
+        self.assertEqual(notifications.count(), 2)
+
+        new_notification = notifications.exclude(pk=notification.pk).first()
+        self.assertEqual(new_notification.actor, self.liker_2)
+        self.assertEqual(new_notification.actor_count, 1)
+        self.assertFalse(new_notification.is_read)
+
+    def test_likes_on_different_posts_do_not_group_together(self):
+        other_post = Post.objects.create(
+            author=self.post_author,
+            community=self.community_1,
+            post_type=Post.USER,
+            content="Another post",
+        )
+
+        self.authenticate(self.liker_1)
+        self.client.post(reverse("post-like", kwargs={"pk": self.post.id}))
+        self.client.post(reverse("post-like", kwargs={"pk": other_post.id}))
+
+        notifications = Notification.objects.filter(
+            recipient=self.post_author, notification_type=Notification.LIKE
+        )
+
+        self.assertEqual(notifications.count(), 2)
+
+    # ---------------------------------------------------------
+    # COMMENT NOTIFICATIONS
+    # ---------------------------------------------------------
+
+    def test_commenting_notifies_post_author(self):
+        self.authenticate(self.commenter)
+
+        response = self.client.post(
+            reverse("comment-create", kwargs={"pk": self.post.id}),
+            {"content": "Nice post!"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        notification = Notification.objects.filter(
+            recipient=self.post_author,
+            notification_type=Notification.COMMENT,
+            post=self.post,
+        ).first()
+
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.actor, self.commenter)
+        self.assertIn("Nice post!", notification.message)
+
+    def test_self_comment_does_not_notify(self):
+        self.authenticate(self.post_author)
+
+        self.client.post(
+            reverse("comment-create", kwargs={"pk": self.post.id}),
+            {"content": "My own comment"},
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.post_author, notification_type=Notification.COMMENT
+            ).exists()
+        )
+
+    def test_each_comment_creates_its_own_notification(self):
+        self.authenticate(self.commenter)
+
+        self.client.post(
+            reverse("comment-create", kwargs={"pk": self.post.id}),
+            {"content": "First comment"},
+        )
+        self.client.post(
+            reverse("comment-create", kwargs={"pk": self.post.id}),
+            {"content": "Second comment"},
+        )
+
+        notifications = Notification.objects.filter(
+            recipient=self.post_author,
+            notification_type=Notification.COMMENT,
+            post=self.post,
+        )
+
+        self.assertEqual(notifications.count(), 2)
+
+    # ---------------------------------------------------------
+    # REPLY NOTIFICATIONS
+    # ---------------------------------------------------------
+
+    def test_replying_notifies_parent_comment_author(self):
+        parent = Comment.objects.create(
+            author=self.commenter,
+            post=self.post,
+            content="Parent comment",
+        )
+
+        self.authenticate(self.liker_1)
+
+        response = self.client.post(
+            reverse("comment-reply", kwargs={"pk": parent.id}),
+            {"content": "This is a reply"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        notification = Notification.objects.filter(
+            recipient=self.commenter, notification_type=Notification.COMMENT
+        ).first()
+
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.actor, self.liker_1)
+        self.assertIn("This is a reply", notification.message)
+
+    def test_reply_does_not_notify_post_author_if_different_from_parent_author(self):
+        parent = Comment.objects.create(
+            author=self.commenter,
+            post=self.post,
+            content="Parent comment",
+        )
+
+        self.authenticate(self.liker_1)
+
+        self.client.post(
+            reverse("comment-reply", kwargs={"pk": parent.id}),
+            {"content": "This is a reply"},
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.post_author, notification_type=Notification.COMMENT
+            ).exists()
+        )
+
+    def test_self_reply_does_not_notify(self):
+        parent = Comment.objects.create(
+            author=self.commenter,
+            post=self.post,
+            content="Parent comment",
+        )
+
+        self.authenticate(self.commenter)
+
+        self.client.post(
+            reverse("comment-reply", kwargs={"pk": parent.id}),
+            {"content": "Replying to myself"},
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                recipient=self.commenter, notification_type=Notification.COMMENT
+            ).exists()
+        )
+
+    def test_reply_to_own_post_comment_notifies_correctly(self):
+        # post author replies to a comment from someone else on their own post
+        parent = Comment.objects.create(
+            author=self.commenter,
+            post=self.post,
+            content="Comment on your post",
+        )
+
+        self.authenticate(self.post_author)
+
+        self.client.post(
+            reverse("comment-reply", kwargs={"pk": parent.id}),
+            {"content": "Thanks for the comment"},
+        )
+
+        notification = Notification.objects.filter(
+            recipient=self.commenter, notification_type=Notification.COMMENT
+        ).first()
+
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.actor, self.post_author)

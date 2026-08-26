@@ -120,7 +120,8 @@ class BusinessApprovalView(APIView):
             if owner:
                 Notification.objects.create(
                     recipient=owner,
-                    notification_type="business_approval",
+                    notification_type=Notification.BUSINESS_APPROVAL,
+                    business=business,
                     message=f"Your business '{business.name}' was approved!",
                 )
             return Response({"detail": "Business approved."}, status=status.HTTP_200_OK)
@@ -137,7 +138,8 @@ class BusinessApprovalView(APIView):
             if business.owner:
                 Notification.objects.create(
                     recipient=business.owner,
-                    notification_type="business_approval",
+                    notification_type=Notification.BUSINESS_APPROVAL,
+                    business=business,
                     message=f"Your business '{business.name}' was rejected. Reason: {business.rejection_reason}",
                 )
             return Response({"detail": "Business rejected."}, status=status.HTTP_200_OK)
@@ -327,7 +329,8 @@ class FollowToggleView(APIView):
         if business.owner:
             Notification.objects.create(
                 recipient=business.owner,
-                notification_type="new_follower",
+                notification_type=Notification.NEW_FOLLOWER,
+                business=business,
                 message=f"{request.user.first_name} started following {business.name}.",
             )
 

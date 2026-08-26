@@ -47,7 +47,8 @@ class AnnouncementCreateView(APIView):
             [
                 Notification(
                     recipient=recipient,
-                    notification_type="announcement",
+                    notification_type=Notification.ANNOUNCEMENT,
+                    announcement=announcement,
                     message=f"New announcement: [{announcement.urgency}] {announcement.title}",
                 )
                 for recipient in recipients

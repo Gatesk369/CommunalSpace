@@ -78,7 +78,7 @@ class TestNotificationModel:
     def test_str_representation(self, user):
         notification = Notification.objects.create(
             recipient=user,
-            notification_type="business_approval",
+            notification_type=Notification.BUSINESS_APPROVAL,
             message="Your business was approved!",
         )
         assert str(notification) == f"business_approval -> {user}"
@@ -86,7 +86,7 @@ class TestNotificationModel:
     def test_defaults(self, user):
         notification = Notification.objects.create(
             recipient=user,
-            notification_type="business_approval",
+            notification_type=Notification.BUSINESS_APPROVAL,
             message="Test message",
         )
         assert notification.is_read is False
@@ -94,10 +94,14 @@ class TestNotificationModel:
 
     def test_ordering_newest_first(self, user):
         first = Notification.objects.create(
-            recipient=user, notification_type="business_approval", message="First"
+            recipient=user,
+            notification_type=Notification.BUSINESS_APPROVAL,
+            message="First",
         )
         second = Notification.objects.create(
-            recipient=user, notification_type="business_approval", message="Second"
+            recipient=user,
+            notification_type=Notification.BUSINESS_APPROVAL,
+            message="Second",
         )
         notifications = list(Notification.objects.all())
         assert notifications[0] == second
@@ -112,11 +116,13 @@ class TestNotificationListView:
 
     def test_returns_only_own_notifications(self, api_client, user, other_user):
         Notification.objects.create(
-            recipient=user, notification_type="business_approval", message="Mine"
+            recipient=user,
+            notification_type=Notification.BUSINESS_APPROVAL,
+            message="Mine",
         )
         Notification.objects.create(
             recipient=other_user,
-            notification_type="business_approval",
+            notification_type=Notification.BUSINESS_APPROVAL,
             message="Not mine",
         )
         api_client.force_authenticate(user=user)
@@ -136,7 +142,9 @@ class TestNotificationListView:
 class TestNotificationMarkReadView:
     def test_marks_own_notification_read(self, api_client, user):
         notification = Notification.objects.create(
-            recipient=user, notification_type="business_approval", message="Test"
+            recipient=user,
+            notification_type=Notification.BUSINESS_APPROVAL,
+            message="Test",
         )
         api_client.force_authenticate(user=user)
         response = api_client.patch(f"/api/v1/notifications/{notification.id}/read/")
@@ -147,7 +155,7 @@ class TestNotificationMarkReadView:
     def test_cannot_mark_other_users_notification(self, api_client, user, other_user):
         notification = Notification.objects.create(
             recipient=other_user,
-            notification_type="business_approval",
+            notification_type=Notification.BUSINESS_APPROVAL,
             message="Not yours",
         )
         api_client.force_authenticate(user=user)
@@ -163,7 +171,9 @@ class TestNotificationMarkReadView:
 
     def test_requires_authentication(self, api_client, user):
         notification = Notification.objects.create(
-            recipient=user, notification_type="business_approval", message="Test"
+            recipient=user,
+            notification_type=Notification.BUSINESS_APPROVAL,
+            message="Test",
         )
         response = api_client.patch(f"/api/v1/notifications/{notification.id}/read/")
         assert response.status_code == 401
@@ -173,10 +183,14 @@ class TestNotificationMarkReadView:
 class TestNotificationMarkAllReadView:
     def test_marks_all_unread_as_read(self, api_client, user):
         Notification.objects.create(
-            recipient=user, notification_type="business_approval", message="First"
+            recipient=user,
+            notification_type=Notification.BUSINESS_APPROVAL,
+            message="First",
         )
         Notification.objects.create(
-            recipient=user, notification_type="business_approval", message="Second"
+            recipient=user,
+            notification_type=Notification.BUSINESS_APPROVAL,
+            message="Second",
         )
         api_client.force_authenticate(user=user)
         response = api_client.patch("/api/v1/notifications/mark-all-read/")
@@ -188,7 +202,7 @@ class TestNotificationMarkAllReadView:
     ):
         other_notification = Notification.objects.create(
             recipient=other_user,
-            notification_type="business_approval",
+            notification_type=Notification.BUSINESS_APPROVAL,
             message="Not yours",
         )
         api_client.force_authenticate(user=user)
@@ -199,7 +213,7 @@ class TestNotificationMarkAllReadView:
     def test_already_read_notifications_unaffected(self, api_client, user):
         notification = Notification.objects.create(
             recipient=user,
-            notification_type="business_approval",
+            notification_type=Notification.BUSINESS_APPROVAL,
             message="Test",
             is_read=True,
         )
@@ -208,6 +222,19 @@ class TestNotificationMarkAllReadView:
         assert response.status_code == 200
         notification.refresh_from_db()
         assert notification.is_read is True
+
+    def test_approval_notification_message_and_business_fk_are_correct(
+        self, api_client, community_admin, business
+    ):
+        api_client.force_authenticate(user=community_admin)
+        api_client.post(
+            f"/api/v1/businesses/review/{business.id}/", {"action": "approve"}
+        )
+
+        notification = Notification.objects.get(
+            recipient=business.owner, notification_type=Notification.BUSINESS_APPROVAL
+        )
+        assert notification.business_id == business.id
 
 
 @pytest.mark.django_db
@@ -221,7 +248,7 @@ class TestBusinessApprovalNotificationTrigger:
         )
         assert response.status_code == 200
         notification = Notification.objects.filter(
-            recipient=business.owner, notification_type="business_approval"
+            recipient=business.owner, notification_type=Notification.BUSINESS_APPROVAL
         ).first()
         assert notification is not None
         assert "approved" in notification.message.lower()
@@ -236,7 +263,7 @@ class TestBusinessApprovalNotificationTrigger:
         )
         assert response.status_code == 200
         notification = Notification.objects.filter(
-            recipient=business.owner, notification_type="business_approval"
+            recipient=business.owner, notification_type=Notification.BUSINESS_APPROVAL
         ).first()
         assert notification is not None
         assert "rejected" in notification.message.lower()
@@ -253,6 +280,53 @@ class TestBusinessApprovalNotificationTrigger:
         )
         assert response.status_code == 200
         assert (
-            Notification.objects.filter(notification_type="business_approval").count()
+            Notification.objects.filter(
+                notification_type=Notification.BUSINESS_APPROVAL
+            ).count()
             == 0
         )
+
+
+@pytest.mark.django_db
+class TestNotificationFKTargets:
+    def test_business_approval_notification_has_business_fk(
+        self, api_client, community_admin, business
+    ):
+        api_client.force_authenticate(user=community_admin)
+        api_client.post(
+            f"/api/v1/businesses/review/{business.id}/", {"action": "approve"}
+        )
+
+        notification = Notification.objects.get(
+            recipient=business.owner, notification_type=Notification.BUSINESS_APPROVAL
+        )
+        assert notification.business == business
+
+
+@pytest.mark.django_db
+def test_regrouped_notification_moves_to_top(
+    self, api_client, user, other_user, community
+):
+    from posts.models import Post
+
+    older = Notification.objects.create(
+        recipient=user, notification_type=Notification.BUSINESS_APPROVAL, message="Old"
+    )
+
+    post = Post.objects.create(
+        author=user, community=community, post_type=Post.USER, content="Test"
+    )
+    like_notification = Notification.objects.create(
+        recipient=user,
+        notification_type=Notification.LIKE,
+        post=post,
+        actor=other_user,
+        message="Someone liked your post.",
+    )
+
+    assert next(iter(Notification.objects.filter(recipient=user))) == like_notification
+
+    older.actor_count += 1
+    older.save()
+
+    assert next(iter(Notification.objects.filter(recipient=user))) == older

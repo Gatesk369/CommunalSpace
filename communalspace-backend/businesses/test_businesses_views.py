@@ -698,7 +698,7 @@ class FollowNotificationTest(TestCase):
         self.client.post(reverse("business-follow", args=[self.business.pk]))
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.owner, notification_type="new_follower"
+                recipient=self.owner, notification_type=Notification.NEW_FOLLOWER
             ).exists()
         )
 
@@ -706,14 +706,18 @@ class FollowNotificationTest(TestCase):
         token = get_token(self.client, "follower@test.com")
         auth_client(self.client, token)
         self.client.post(reverse("business-follow", args=[self.business.pk]))
-        Notification.objects.filter(notification_type="new_follower").delete()
+        Notification.objects.filter(
+            notification_type=Notification.NEW_FOLLOWER
+        ).delete()
 
         self.client.post(
             reverse("business-follow", args=[self.business.pk])
         )  # unfollow
 
         self.assertFalse(
-            Notification.objects.filter(notification_type="new_follower").exists()
+            Notification.objects.filter(
+                notification_type=Notification.NEW_FOLLOWER
+            ).exists()
         )
 
     def test_notification_message_includes_business_name(self):
@@ -721,6 +725,16 @@ class FollowNotificationTest(TestCase):
         auth_client(self.client, token)
         self.client.post(reverse("business-follow", args=[self.business.pk]))
         notification = Notification.objects.get(
-            recipient=self.owner, notification_type="new_follower"
+            recipient=self.owner, notification_type=Notification.NEW_FOLLOWER
         )
         self.assertIn("Followable Shop", notification.message)
+
+    def test_notification_has_business_fk(self):
+        token = get_token(self.client, "follower@test.com")
+        auth_client(self.client, token)
+        self.client.post(reverse("business-follow", args=[self.business.pk]))
+
+        notification = Notification.objects.get(
+            recipient=self.owner, notification_type=Notification.NEW_FOLLOWER
+        )
+        self.assertEqual(notification.business, self.business)

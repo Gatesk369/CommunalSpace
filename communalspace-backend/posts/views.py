@@ -279,6 +279,28 @@ class PostLikeView(APIView):
             post=post,
         )
 
+        if post.author and post.author != request.user:
+            notification = Notification.objects.filter(
+                recipient=post.author,
+                notification_type=Notification.LIKE,
+                post=post,
+                is_read=False,
+            ).first()
+
+            if notification:
+                notification.actor = request.user
+                notification.actor_count += 1
+                notification.message = f"{request.user.first_name} and {notification.actor_count - 1} others liked your post."
+                notification.save()
+            else:
+                Notification.objects.create(
+                    recipient=post.author,
+                    actor=request.user,
+                    notification_type=Notification.LIKE,
+                    post=post,
+                    message=f"{request.user.first_name} liked your post.",
+                )
+
         return Response(
             {
                 "detail": "Post liked.",
@@ -346,6 +368,16 @@ class CommentCreateView(APIView):
                 post=post,
             )
 
+            if post.author and post.author != request.user:
+                Notification.objects.create(
+                    recipient=post.author,
+                    actor=request.user,
+                    notification_type=Notification.COMMENT,
+                    post=post,
+                    comment=comment,
+                    message=f'{request.user.first_name} commented: "{comment.content[:100]}"',
+                )
+
             return Response(
                 CommentSerializer(comment, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,
@@ -410,6 +442,16 @@ class CommentReplyCreateView(APIView):
                 post=parent.post,
                 parent=parent,
             )
+
+            if parent.author and parent.author != request.user:
+                Notification.objects.create(
+                    recipient=parent.author,
+                    actor=request.user,
+                    notification_type=Notification.COMMENT,
+                    post=parent.post,
+                    comment=reply,
+                    message=f'{request.user.first_name} replied to your comment: "{reply.content[:100]}"',
+                )
 
             return Response(
                 CommentSerializer(
@@ -638,19 +680,25 @@ class ReportReviewView(APIView):
             if report.reporter:
                 Notification.objects.create(
                     recipient=report.reporter,
-                    notification_type="report_outcome",
+                    notification_type=Notification.REPORT_OUTCOME,
+                    post=report.post,
+                    comment=report.comment,
                     message="Your report was reviewed and the content was taken down.",
                 )
             for reporter in other_reporters:
                 Notification.objects.create(
                     recipient=reporter,
-                    notification_type="report_outcome",
+                    notification_type=Notification.REPORT_OUTCOME,
+                    post=report.post,
+                    comment=report.comment,
                     message="Your report was reviewed and the content was taken down.",
                 )
             if content_author:
                 Notification.objects.create(
                     recipient=content_author,
-                    notification_type="report_outcome",
+                    notification_type=Notification.REPORT_OUTCOME,
+                    post=report.post,
+                    comment=report.comment,
                     message=f"Your {content_label} was removed. Reason: {takedown_reason}",
                 )
 

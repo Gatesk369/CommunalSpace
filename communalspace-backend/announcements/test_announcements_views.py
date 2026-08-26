@@ -467,12 +467,12 @@ class AnnouncementNotificationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.member_1, notification_type="announcement"
+                recipient=self.member_1, notification_type=Notification.ANNOUNCEMENT
             ).exists()
         )
         self.assertTrue(
             Notification.objects.filter(
-                recipient=self.member_2, notification_type="announcement"
+                recipient=self.member_2, notification_type=Notification.ANNOUNCEMENT
             ).exists()
         )
 
@@ -491,7 +491,7 @@ class AnnouncementNotificationTests(TestCase):
         )
 
         notification = Notification.objects.get(
-            recipient=self.member_1, notification_type="announcement"
+            recipient=self.member_1, notification_type=Notification.ANNOUNCEMENT
         )
         self.assertIn("Water outage", notification.message)
 
@@ -511,7 +511,8 @@ class AnnouncementNotificationTests(TestCase):
 
         self.assertFalse(
             Notification.objects.filter(
-                recipient=self.outside_member, notification_type="announcement"
+                recipient=self.outside_member,
+                notification_type=Notification.ANNOUNCEMENT,
             ).exists()
         )
 
@@ -531,7 +532,8 @@ class AnnouncementNotificationTests(TestCase):
 
         self.assertFalse(
             Notification.objects.filter(
-                recipient=self.communityless_user, notification_type="announcement"
+                recipient=self.communityless_user,
+                notification_type=Notification.ANNOUNCEMENT,
             ).exists()
         )
 
@@ -561,7 +563,7 @@ class AnnouncementNotificationTests(TestCase):
 
         self.assertEqual(
             Notification.objects.filter(
-                recipient=dual_member, notification_type="announcement"
+                recipient=dual_member, notification_type=Notification.ANNOUNCEMENT
             ).count(),
             1,
         )
@@ -582,5 +584,27 @@ class AnnouncementNotificationTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(
-            Notification.objects.filter(notification_type="announcement").exists()
+            Notification.objects.filter(
+                notification_type=Notification.ANNOUNCEMENT
+            ).exists()
         )
+
+    def test_notification_has_announcement_fk(self):
+        self.authenticate(self.community_admin_1)
+
+        self.client.post(
+            reverse("announcement-create"),
+            {
+                "title": "Water outage",
+                "content": "Water will be shut off tomorrow.",
+                "urgency": Announcement.WARNING,
+                "communities": [self.community_1.id],
+            },
+            format="json",
+        )
+
+        announcement = Announcement.objects.get(title="Water outage")
+        notification = Notification.objects.get(
+            recipient=self.member_1, notification_type=Notification.ANNOUNCEMENT
+        )
+        self.assertEqual(notification.announcement, announcement)
