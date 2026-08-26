@@ -1,6 +1,6 @@
-# CommunalSpace
+# Communal Space
 
-A social and civic backend for neighborhood communities — built with Django REST Framework. Residents join a community, follow a local social feed, discover and rate businesses, and receive official announcements from community admins. Long-term, Communal Space is aimed at becoming a smart-community operating system, extending into incident reporting and security integrations.
+A social and civic backend for neighborhood communities — built with Django REST Framework. Residents join a community, follow a local social feed, discover and rate businesses, follow the ones they like, and receive official announcements from community admins, with a unified notification system tying it all together. Long-term, Communal Space is aimed at becoming a smart-community operating system, extending into incident reporting and security integrations.
 
 ## Tech Stack
 
@@ -9,7 +9,7 @@ A social and civic backend for neighborhood communities — built with Django RE
 - **Database:** SQLite (development), PostgreSQL (production target)
 - **Config:** `python-decouple` for environment variables
 - **Testing:** `pytest-django`
-- **API Docs:** `drf-spectacular` (installed, not yet configured)
+- **API Docs:** `drf-spectacular` — live interactive schema via Swagger UI and Redoc
 - **CI:** GitHub Actions running the test suite on every push
 - **Tooling:** pre-commit hooks, `django-extensions`, `django-filter`, `whitenoise`
 
@@ -43,6 +43,9 @@ The business directory.
 - Subsequent branches go through their own independent per-community approval
 - Ownership history tracked automatically
 - Star ratings: any user can rate an approved business 0.5–5.0 stars in half-star steps (stored internally as an integer 1–10); rating again updates your existing score rather than duplicating it; `average_rating` and `rating_count` are computed live on list/detail responses, never stored
+- Users can follow and unfollow businesses; following notifies the business owner
+- Businesses carry a general `category` (e.g. Food & Dining, Retail & Shopping) set at creation
+- Discovery defaults to **"near you"** — approved businesses with an approved branch in the viewer's own community — with query params to browse a specific other community (`?community=<id>`), expand to everyone (`?scope=all`), and/or filter by category (`?category=<value>`)
 
 ### `posts`
 
@@ -52,7 +55,7 @@ The community social feed.
 - Up to 4 media items per post (image, video, GIF) with automatic type detection
 - Cursor-paginated feed, filterable by community and post type — not restricted to the viewer's own community
 - Likes, comments with nested replies, and comment likes
-- Reactive moderation: any user can report a post or comment; a community admin (scoped to their own community) or platform admin reviews the report and either dismisses it or removes the content (soft delete — `Post.status` / `Comment.is_active`, both with a required takedown reason)
+- Reactive moderation: any user can report a post or comment; a community admin (scoped to their own community) or platform admin reviews the report and either dismisses it or removes the content (soft delete — `Post.status` / `Comment.is_active`, both with a required takedown reason); removing content also auto-resolves every other unreviewed report on the same target and notifies those reporters too
 
 ### `announcements`
 
@@ -63,12 +66,23 @@ Official broadcasts from admins, distinct from the peer-to-peer post feed.
 - Three urgency levels: info, warning, critical
 - Open to all authenticated users to read, regardless of their own community, so residents can see notices from communities they don't belong to
 - Full CRUD, with community-admin edit/delete scoping enforced against *every* community an announcement targets, not just one
+- Creating an announcement notifies every current member of every targeted community
+
+### `notifications`
+
+A single, unified in-app notification feed — polled by the client, not pushed over websockets, matching the project's current infrastructure stage.
+
+- Triggered by six event types: business approval/rejection, new followers, announcements, report outcomes, likes, and comments/replies
+- Likes are **grouped** per post — repeated likes update one notification ("X and N others liked your post") instead of creating a new row each time; a group closes once read, and the next like on that post opens a fresh one
+- Comments and replies each generate their own individual notification (no grouping), since the recipient needs to actually read what was said — a reply notifies the parent comment's author, not the post author
+- Each notification optionally carries a direct reference to its source object (post, comment, business, or announcement) so a frontend can deep-link straight to it
+- Endpoints to list your notifications, mark one read, or mark all read — ownership-scoped throughout, so a user can't see or touch another user's notifications
 
 ## Setup
 
 ```bash
 git clone <repo-url>
-cd communalspace
+cd CommunalSpace
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
@@ -91,20 +105,19 @@ python manage.py createsuperuser   # creates a platform admin
 python manage.py runserver
 ```
 
+Interactive API docs are then available at `/api/v1/schema/swagger-ui/` (or `/api/v1/schema/redoc/` for the Redoc variant).
+
 ## Running Tests
 
 ```bash
 pytest
 ```
 
-Each app has its own test suite covering CRUD, authorization/role scoping, side effects (e.g. role upgrades on approval, cascading branch approval), and invalid-input handling.
+Each app has its own test suite covering CRUD, authorization/role scoping, side effects (e.g. role upgrades on approval, cascading branch approval, notification fan-out), and invalid-input handling.
 
 ## What's Next
 
-- **API documentation** — configure `drf-spectacular` for a live schema/Swagger UI (already installed)
-- **Business discovery filtering** — category, city, and community filters on the business directory (category doesn't exist as a field yet; city currently lives on `BusinessBranch`, not `Business`)
-- **Notifications system** — business approval status, new posts/likes/comments, announcement broadcasts, report outcomes
-- **Direct messaging** — resident-to-resident and resident-to-business-owner
+- **Direct messaging** — resident-to-resident and resident-to-business-owner, deferred pending real-time infrastructure (likely WebSockets via Django Channels)
 - **Production readiness** — switch from SQLite to PostgreSQL, move media storage from local disk to AWS S3 via `django-storages`, point email verification/reset links at frontend URLs instead of localhost
 
 ### Long-Term Vision

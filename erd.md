@@ -16,6 +16,21 @@ erDiagram
         datetime updated_at
     }
 
+    EmailVerificationToken {
+        int id PK
+        int user_id FK, UK
+        uuid token UK
+        datetime created_at
+    }
+
+    PasswordResetToken {
+        int id PK
+        int user_id FK
+        uuid token UK
+        datetime created_at
+        bool is_used
+    }
+
     Community {
         int id PK
         string name
@@ -36,13 +51,23 @@ erDiagram
         int reviewed_by_id FK
     }
 
+    Announcement {
+        int id PK
+        string title
+        text content
+        string urgency
+        datetime created_at
+        datetime updated_at
+    }
+
     Business {
         int id PK
         string name
+        string category
         int owner_id FK
         int community_id FK
         string status
-        string rejection_reason
+        text rejection_reason
         datetime created_at
     }
 
@@ -50,12 +75,12 @@ erDiagram
         int id PK
         int business_id FK
         int community_id FK
-        string status
-        string rejection_reason
         string address
         string city
         string contact_phone
         string contact_email
+        string status
+        text rejection_reason
         datetime created_at
     }
 
@@ -64,6 +89,22 @@ erDiagram
         int business_id FK
         int owner_id FK
         datetime transferred_at
+    }
+
+    BusinessRating {
+        int id PK
+        int business_id FK
+        int user_id FK
+        int stars
+        datetime created_at
+        datetime updated_at
+    }
+
+    Follow {
+        int id PK
+        int follower_id FK
+        int business_id FK
+        datetime created_at
     }
 
     Post {
@@ -102,8 +143,8 @@ erDiagram
         int post_id FK
         int parent_id FK
         text content
-        bool is_active
         text takedown_reason
+        bool is_active
         datetime created_at
     }
 
@@ -125,17 +166,40 @@ erDiagram
         datetime created_at
     }
 
+    Notification {
+        int id PK
+        int recipient_id FK
+        int actor_id FK
+        string notification_type
+        string message
+        int post_id FK
+        int comment_id FK
+        int business_id FK
+        int announcement_id FK
+        int actor_count
+        bool is_read
+        datetime created_at
+        datetime updated_at
+    }
+
     Community ||--o{ User : "has members"
     User }o--o{ Community : "administers"
+    User ||--o| EmailVerificationToken : "has verification token"
+    User ||--o{ PasswordResetToken : "has reset tokens"
     User ||--o{ CommunityAdminApplication : "applies"
     Community ||--o{ CommunityAdminApplication : "receives applications"
     User ||--o{ CommunityAdminApplication : "reviews"
+    Community }o--o{ Announcement : "receives"
     User ||--o{ Business : "owns"
     Community ||--o{ Business : "routes approval for"
     Business ||--o{ BusinessBranch : "has branches"
     Community ||--o{ BusinessBranch : "hosts"
-    Business ||--o{ BusinessOwnerHistory : "has history"
+    Business ||--o{ BusinessOwnerHistory : "has ownership history"
     User ||--o{ BusinessOwnerHistory : "held ownership"
+    Business ||--o{ BusinessRating : "receives ratings"
+    User ||--o{ BusinessRating : "rates"
+    User ||--o{ Follow : "follows"
+    Business ||--o{ Follow : "is followed"
     User ||--o{ Post : "authors"
     BusinessBranch ||--o{ Post : "publishes"
     Community ||--o{ Post : "contains"
@@ -150,4 +214,18 @@ erDiagram
     User ||--o{ Report : "files"
     Post ||--o{ Report : "is reported by"
     Comment ||--o{ Report : "is reported by"
+    User ||--o{ Notification : "receives"
+    User ||--o{ Notification : "acts on"
+    Post ||--o{ Notification : "relates to"
+    Comment ||--o{ Notification : "relates to"
+    Business ||--o{ Notification : "relates to"
+    Announcement ||--o{ Notification : "relates to"
 ```
+
+**Database constraints**
+
+- `BusinessRating`: one rating per `(business, user)` pair.
+- `Follow`: one follow per `(follower, business)` pair.
+- `Like`: one like per `(user, post)` pair.
+- `CommentLike`: one like per `(user, comment)` pair.
+- `CommunityAdminApplication`: one pending application per `(applicant, community)` pair.
