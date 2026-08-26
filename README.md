@@ -1,6 +1,6 @@
 # CommunalSpace
 
-A social and civic backend for neighborhood communities — built with Django REST Framework. Residents join a community, follow a local social feed, discover and rate businesses, and receive official announcements from community admins. Long-term, CommunalSpace is aimed at becoming a smart-community operating system, extending into incident reporting and security integrations.
+A social and civic backend for neighborhood communities — built with Django REST Framework. Residents join a community, follow a local social feed, discover and rate businesses, and receive official announcements from community admins. Long-term, Communal Space is aimed at becoming a smart-community operating system, extending into incident reporting and security integrations.
 
 ## Tech Stack
 
@@ -109,4 +109,4 @@ Each app has its own test suite covering CRUD, authorization/role scoping, side 
 
 ### Long-Term Vision
 
-CommunalSpace's longer-term direction is a "civic OS" for neighborhoods — incident and suspicious-activity reporting, real-time notifications over WebSockets, and eventual integration with security hardware (cameras, sensors) layered on top of the community structure already in place.
+Communal Space's longer-term direction is a "civic OS" for neighborhoods — incident and suspicious-activity reporting, real-time notifications over WebSockets, and eventual integration with security hardware (cameras, sensors) layered on top of the community structure already in place.

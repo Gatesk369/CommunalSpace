@@ -14,7 +14,7 @@ def send_verification_email(sender, instance, created, **kwargs):
             f"http://localhost:8000/api/accounts/verify-email/{token.token}/"
         )
         send_mail(
-            subject="Verify your CommunalSpace account",
+            subject="Verify your Communal Space account",
             message=f"Hi {instance.first_name},\n\nClick the link below to verify your account:\n\n{verification_link}\n\nIf you did not register, ignore this email.",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[instance.email],

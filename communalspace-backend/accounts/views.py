@@ -205,7 +205,7 @@ class PasswordResetRequestView(APIView):
         token = PasswordResetToken.objects.create(user=user)
         reset_link = f"http://localhost:8000/api/accounts/reset-password/{token.token}/"
         send_mail(
-            subject="Reset your CommunalSpace password",
+            subject="Reset your Communal Space password",
             message=f"Hi {user.first_name},\n\nClick the link below to reset your password:\n\n{reset_link}\n\nIf you did not request this, ignore this email.\n\nThis link can only be used once.",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],
