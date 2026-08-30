@@ -35,6 +35,7 @@ __pycache__/
 db.sqlite3
 static_root/
 media_root/
+media/
 
 # --- PostgreSQL ---
 # In case you ever export your DB locally

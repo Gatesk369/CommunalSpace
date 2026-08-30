@@ -1,13 +1,14 @@
 from accounts.models import User
 from businesses.models import Business, BusinessBranch
 from communities.models import Community
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Comment, CommentLike, Like, Post, Report
+from .models import Comment, CommentLike, Like, Post, PostMedia, Report
 
 
 class PostAPITests(TestCase):
@@ -1491,3 +1492,240 @@ class LikeCommentNotificationTests(TestCase):
 
         self.assertIsNotNone(notification)
         self.assertEqual(notification.actor, self.post_author)
+
+
+class PostMediaUploadTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.community = Community.objects.create(
+            name="Media Test Community",
+            city="Kampala",
+            address="1 Media St",
+        )
+
+        self.resident = User.objects.create_user(
+            email="mediauser@example.com",
+            password="password123",
+            first_name="Media",
+            last_name="Uploader",
+            role=User.RESIDENT,
+            community=self.community,
+            is_active=True,
+        )
+
+    def authenticate(self):
+        self.client.force_authenticate(user=self.resident)
+
+    def make_image(self, name="test.jpg", content_type="image/jpeg"):
+        return SimpleUploadedFile(name, b"fake-image-bytes", content_type=content_type)
+
+    def make_video(self, name="test.mp4", content_type="video/mp4"):
+        return SimpleUploadedFile(name, b"fake-video-bytes", content_type=content_type)
+
+    def make_gif(self, name="test.gif", content_type="image/gif"):
+        return SimpleUploadedFile(name, b"fake-gif-bytes", content_type=content_type)
+
+    # ---------------------------------------------------------
+    # SUCCESSFUL UPLOADS
+    # ---------------------------------------------------------
+
+    def test_can_create_post_with_single_image(self):
+        self.authenticate()
+
+        response = self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "Check out this photo",
+                "media": [self.make_image()],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        post = Post.objects.get(content="Check out this photo")
+        self.assertEqual(post.media.count(), 1)
+        self.assertEqual(post.media.first().media_type, "image")
+
+    def test_can_create_post_with_multiple_media_items(self):
+        self.authenticate()
+
+        response = self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "Multiple media items",
+                "media": [
+                    self.make_image(),
+                    self.make_image("test2.jpg"),
+                    self.make_video(),
+                ],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        post = Post.objects.get(content="Multiple media items")
+        self.assertEqual(post.media.count(), 3)
+
+    def test_video_media_type_detected_correctly(self):
+        self.authenticate()
+
+        self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "A video post",
+                "media": [self.make_video()],
+            },
+            format="multipart",
+        )
+
+        post = Post.objects.get(content="A video post")
+        self.assertEqual(post.media.first().media_type, "video")
+
+    def test_gif_media_type_detected_correctly(self):
+        self.authenticate()
+
+        self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "A gif post",
+                "media": [self.make_gif()],
+            },
+            format="multipart",
+        )
+
+        post = Post.objects.get(content="A gif post")
+        self.assertEqual(post.media.first().media_type, "gif")
+
+    def test_media_file_size_recorded(self):
+        self.authenticate()
+
+        image = self.make_image()
+
+        self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "Size check",
+                "media": [image],
+            },
+            format="multipart",
+        )
+
+        post = Post.objects.get(content="Size check")
+        media = post.media.first()
+        self.assertEqual(media.file_size, len(b"fake-image-bytes"))
+
+    def test_post_with_media_only_and_no_content_succeeds(self):
+        self.authenticate()
+
+        response = self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "media": [self.make_image()],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    # ---------------------------------------------------------
+    # VALIDATION / REJECTION
+    # ---------------------------------------------------------
+
+    def test_post_requires_content_or_media(self):
+        self.authenticate()
+
+        response = self.client.post(
+            reverse("post-create"),
+            {"post_type": Post.USER},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_upload_more_than_four_media_items(self):
+        self.authenticate()
+
+        files = [self.make_image(f"test{i}.jpg") for i in range(5)]
+
+        response = self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "Too many files",
+                "media": files,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Post.objects.filter(content="Too many files").exists())
+
+    def test_unsupported_media_type_rejected(self):
+        self.authenticate()
+
+        bad_file = SimpleUploadedFile(
+            "document.pdf", b"fake-pdf-bytes", content_type="application/pdf"
+        )
+
+        response = self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "Sneaky pdf",
+                "media": [bad_file],
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unsupported_media_type_does_not_leave_orphaned_post(self):
+        self.authenticate()
+
+        bad_file = SimpleUploadedFile(
+            "document.pdf", b"fake-pdf-bytes", content_type="application/pdf"
+        )
+
+        self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "Sneaky pdf",
+                "media": [bad_file],
+            },
+            format="multipart",
+        )
+
+        self.assertFalse(Post.objects.filter(content="Sneaky pdf").exists())
+
+    def test_valid_media_before_invalid_media_does_not_persist_either(self):
+        self.authenticate()
+
+        good_file = self.make_image()
+        bad_file = SimpleUploadedFile(
+            "document.pdf", b"fake-pdf-bytes", content_type="application/pdf"
+        )
+
+        self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": "Mixed valid and invalid",
+                "media": [good_file, bad_file],
+            },
+            format="multipart",
+        )
+
+        self.assertFalse(
+            Post.objects.filter(content="Mixed valid and invalid").exists()
+        )
+        self.assertEqual(PostMedia.objects.count(), 0)
