@@ -1,6 +1,8 @@
+@import url("https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400;0,17..18,500;0,17..18,600;0,17..18,700;1,17..18,400;1,17..18,500;1,17..18,600;1,17..18,700&display=swap");
 @import "tailwindcss";
 
 @theme {
+  --font-google-sans: "Google Sans", Arial, sans-serif;
   --color-cs-orange: #f97316;
   --color-cs-orange-deep: #ea580c;
   --color-cs-coral: #f2542d;
