@@ -10,9 +10,7 @@ from .models import EmailVerificationToken, User
 def send_verification_email(sender, instance, created, **kwargs):
     if created:
         token = EmailVerificationToken.objects.create(user=instance)
-        verification_link = (
-            f"http://localhost:8000/api/accounts/verify-email/{token.token}/"
-        )
+        verification_link = f"{settings.FRONTEND_URL}/verify-email/{token.token}/"
         send_mail(
             subject="Verify your Communal Space account",
             message=f"Hi {instance.first_name},\n\nClick the link below to verify your account:\n\n{verification_link}\n\nIf you did not register, ignore this email.",

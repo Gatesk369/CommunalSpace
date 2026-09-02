@@ -11,7 +11,11 @@ export async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.detail || "Something went wrong.");
+    const message =
+      data.detail ||
+      Object.values(data).flat().join(" ") ||
+      "Something went wrong.";
+    throw new Error(message);
   }
 
   return response.json();
