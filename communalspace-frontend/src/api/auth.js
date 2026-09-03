@@ -18,3 +18,17 @@ export function signupRequest({ firstName, lastName, email, password }) {
     }),
   });
 }
+
+export function requestPasswordReset(email) {
+  return apiRequest("/accounts/reset-password/", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmPasswordReset(token, newPassword) {
+  return apiRequest(`/accounts/reset-password/${token}/`, {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+}
