@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import AuthBackground from "../components/AuthBackground";
 import { confirmPasswordReset } from "../api/auth";
+import LoadingButton from "../components/LoadingButton";
 
 export default function ResetPasswordPage() {
   const { token } = useParams();
@@ -10,13 +11,16 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
     if (password !== confirmPassword) {
       setError("Passwords don't match.");
+      setIsLoading(false);
       return;
     }
 
@@ -25,6 +29,8 @@ export default function ResetPasswordPage() {
       navigate("/login");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -55,13 +61,15 @@ export default function ResetPasswordPage() {
             className="bg-white border border-cs-line rounded-full px-4 py-3.5 text-xl outline-none focus:border-cs-orange"
           />
           {error && <p className="text-cs-red text-lg text-center">{error}</p>}
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            type="submit"
-            className="bg-cs-orange text-white text-xl font-bold rounded-full py-3.5 mt-2"
-          >
-            Reset Password
-          </motion.button>
+          <div className="w-full flex items-center justify-center">
+            <LoadingButton
+              type="submit"
+              isLoading={isLoading}
+              loadingText="Resetting..."
+            >
+              Reset Password
+            </LoadingButton>
+          </div>
         </form>
         <p className="text-lg mt-6">
           <Link to="/login" className="font-bold underline">

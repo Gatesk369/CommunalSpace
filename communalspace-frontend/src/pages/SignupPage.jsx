@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import AuthBackground from "../components/AuthBackground";
 import { signupRequest } from "../api/auth";
+import LoadingButton from "../components/LoadingButton";
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState("");
@@ -11,31 +12,37 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-
+    setIsLoading(true);
     const nameParts = fullName.trim().split(/\s+/);
     if (nameParts.length < 2) {
       setError("Please enter your first and last name.");
+      setIsLoading(false);
       return;
     }
     if (!email) {
       setError("Please enter your email.");
+      setIsLoading(false);
       return;
     }
     if (!password) {
       setError("Please enter your password.");
+      setIsLoading(false);
       return;
     }
     if (!confirmPassword) {
       setError("Confirm password cannot be empty.");
+      setIsLoading(false);
       return;
     }
 
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
+      setIsLoading(false);
       return;
     }
 
@@ -47,6 +54,8 @@ export default function SignupPage() {
       setSuccess(true);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -138,13 +147,13 @@ export default function SignupPage() {
                 )}
 
                 <div className="w-full flex items-center justify-center">
-                  <motion.button
-                    whileTap={{ scale: 0.96 }}
+                  <LoadingButton
                     type="submit"
-                    className="w-[80%] bg-cs-orange text-white text-xl font-bold rounded-full py-3.5 mt-2"
+                    isLoading={isLoading}
+                    loadingText="Signing up..."
                   >
                     Sign Up
-                  </motion.button>
+                  </LoadingButton>
                 </div>
               </form>
 

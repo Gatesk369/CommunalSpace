@@ -3,20 +3,26 @@ import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import AuthBackground from "../components/AuthBackground";
 import { requestPasswordReset } from "../api/auth";
+import LoadingButton from "../components/LoadingButton";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
+
     try {
       await requestPasswordReset(email);
       setSent(true);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -60,13 +66,15 @@ export default function ForgotPasswordPage() {
               {error && (
                 <p className="text-cs-red text-lg text-center">{error}</p>
               )}
-              <motion.button
-                whileTap={{ scale: 0.96 }}
-                type="submit"
-                className="bg-cs-orange text-white text-xl font-bold rounded-full py-3.5 mt-2"
-              >
-                Send Reset Link
-              </motion.button>
+              <div className="w-full flex items-center justify-center">
+                <LoadingButton
+                  type="submit"
+                  isLoading={isLoading}
+                  loadingText="Sending link..."
+                >
+                  Send Reset Link
+                </LoadingButton>
+              </div>
             </form>
             <p className="text-lg mt-6">
               <Link to="/login" className="font-bold underline">

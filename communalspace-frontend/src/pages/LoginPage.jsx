@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { useAuth } from "../context/AuthContext";
 import AuthBackground from "../components/AuthBackground";
+import LoadingButton from "../components/LoadingButton";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -10,18 +11,21 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
     try {
       await login(email, password);
       navigate("/");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   }
-
   return (
     <AuthBackground>
       <motion.div
@@ -87,13 +91,13 @@ export default function LoginPage() {
               Forgot Password?
             </Link>
             <div className="w-full flex items-center justify-center">
-              <motion.button
-                whileTap={{ scale: 0.96 }}
+              <LoadingButton
                 type="submit"
-                className="w-[80%] bg-cs-orange text-white text-xl font-bold rounded-full py-3.5 mt-2"
+                isLoading={isLoading}
+                loadingText="Logging in..."
               >
                 Log In
-              </motion.button>
+              </LoadingButton>
             </div>
           </form>
 

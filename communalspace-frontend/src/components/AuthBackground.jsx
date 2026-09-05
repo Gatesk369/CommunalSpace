@@ -1,4 +1,3 @@
-// components/AuthBackground.jsx
 import { motion } from "motion/react";
 
 export default function AuthBackground({ children }) {
