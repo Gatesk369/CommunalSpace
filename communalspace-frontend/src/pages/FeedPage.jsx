@@ -11,10 +11,10 @@ export default function FeedPage() {
   const [showBanner, setShowBanner] = useState(true);
 
   return (
-    <div className="bg-cs-bg w-screen min-h-screen">
+    <div className="bg-cs-bg max-w-screen min-h-screen flex items-center justify-center p-4 sm:p-8">
       <Navbar1 />
-      <div className="pt-42 max-w-[1240px] mx-auto px-8 pb-16 grid grid-cols-[1fr_340px] gap-8 items-start">
-        <main>
+      <div className="mt-24 pl-120 w-full grid grid-cols-[1.3fr_28rem] gap-8 mr-0">
+        <main className="w-full">
           {showBanner && (
             <AnnouncementBanner
               message="Power shut off this week from 8am–7pm across Kisaasi, Kyanja."
@@ -38,10 +38,11 @@ export default function FeedPage() {
             likeCount={41}
             commentCount={9}
             isBusiness
+            media
           />
         </main>
 
-        <aside>
+        <aside className="flex flex-col gap-8">
           <NearbyBusinessesCard
             businesses={[
               { name: "Sunrise Bakery", initiallyFollowing: true },

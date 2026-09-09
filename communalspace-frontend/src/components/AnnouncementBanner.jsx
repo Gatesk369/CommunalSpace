@@ -10,7 +10,7 @@ export default function AnnouncementBanner({
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="w-[804px] drop-shadow-lg flex items-center gap-4 bg-[linear-gradient(90deg,theme(colors.cs-orange)_0%,theme(colors.cs-magenta)_60%,theme(colors.cs-purple)_100%)] rounded-full px-4 py-3 mb-6"
+      className="drop-shadow-lg flex items-center gap-4 bg-[linear-gradient(90deg,theme(colors.cs-orange)_0%,theme(colors.cs-magenta)_60%,theme(colors.cs-purple)_100%)] rounded-full px-4 py-3 mb-6"
     >
       <span className="bg-white/25 text-white text-xs font-extrabold tracking-wide uppercase px-3 py-1 rounded-full flex-shrink-0">
         {urgency}

@@ -7,6 +7,7 @@ export default function PostCard({
   community,
   timeAgo,
   content,
+  media,
   likeCount = 0,
   commentCount = 0,
   isBusiness = false,
@@ -37,7 +38,12 @@ export default function PostCard({
           </span>
         </div>
       </div>
-
+      {media && (
+        <div className="flex bg-cs-line rounded-2xl h-128 my-2 items-center justify-center">
+          {" "}
+          <p className="text-cs-muted">Media Content</p>
+        </div>
+      )}
       <p className="text-sm text-cs-ink leading-relaxed mb-4">{content}</p>
 
       <div className="flex items-center gap-3">
