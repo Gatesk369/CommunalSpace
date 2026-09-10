@@ -25,7 +25,7 @@ repos:
     hooks:
       - id: eslint
         name: eslint
-        entry: npx eslint --fix
+        entry: bash -c 'cd communalspace-frontend && npx eslint --fix .'
         language: system
-        files: \.(js|jsx|ts|tsx)$
-        types: [file]
+        files: ^communalspace-frontend/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
