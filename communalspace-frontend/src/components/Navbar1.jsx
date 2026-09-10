@@ -4,11 +4,6 @@ export default function Navbar1() {
   return (
     <nav className="font-google-sans bg-white border-b-2 border-cs-line w-full z-50 top-0 h-20 fixed">
       <div className="flex items-center justify-between w-full h-full">
-        <motion.div className="flex items-center h-full bg-[linear-gradient(theme(colors.cs-coral)_0%,theme(colors.cs-orange)_30%)] w-52 rounded-r-[70px] whitespace-nowrap">
-          <p className="pl-12 text-[30px] font-semibold">
-            <span className="text-white">Communal</span> Space
-          </p>
-        </motion.div>
         <motion.button
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
