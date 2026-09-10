@@ -356,6 +356,37 @@ class PostAPITests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_post_content_at_max_length_is_accepted(self):
+        self.authenticate()
+
+        content = "a" * Post.CONTENT_MAX_LENGTH
+
+        response = self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": content,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_post_content_over_max_length_is_rejected(self):
+        self.authenticate()
+
+        content = "a" * (Post.CONTENT_MAX_LENGTH + 1)
+
+        response = self.client.post(
+            reverse("post-create"),
+            {
+                "post_type": Post.USER,
+                "content": content,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Post.objects.filter(content=content).exists())
+
     # ---------------------------------------------------------
     # POST DETAIL
     # ---------------------------------------------------------
@@ -532,6 +563,31 @@ class PostAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_comment_content_at_max_length_is_accepted(self):
+        self.authenticate()
+
+        content = "a" * Comment.CONTENT_MAX_LENGTH
+
+        response = self.client.post(
+            reverse("comment-create", kwargs={"pk": self.post.id}),
+            {"content": content},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_comment_content_over_max_length_is_rejected(self):
+        self.authenticate()
+
+        content = "a" * (Comment.CONTENT_MAX_LENGTH + 1)
+
+        response = self.client.post(
+            reverse("comment-create", kwargs={"pk": self.post.id}),
+            {"content": content},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Comment.objects.filter(content=content).exists())
 
     # ---------------------------------------------------------
     # COMMENT REPLIES

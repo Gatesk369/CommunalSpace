@@ -66,6 +66,13 @@ class PostSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "A post must have content or at least one media item."
             )
+
+        content = data.get("content")
+        if content and len(content) > Post.CONTENT_MAX_LENGTH:
+            raise serializers.ValidationError(
+                f"Content cannot exceed {Post.CONTENT_MAX_LENGTH} characters."
+            )
+
         post_type = data.get("post_type")
         branch = data.get("branch")
 
@@ -113,6 +120,14 @@ class CommentSerializer(serializers.ModelSerializer):
             "takedown_reason",
             "created_at",
         ]
+
+    def validate(self, data):
+        content = data.get("content")
+        if content and len(content) > Comment.CONTENT_MAX_LENGTH:
+            raise serializers.ValidationError(
+                f"Content cannot exceed {Comment.CONTENT_MAX_LENGTH} characters."
+            )
+        return data
 
     def get_user_has_liked(self, obj):
         request = self.context.get("request")

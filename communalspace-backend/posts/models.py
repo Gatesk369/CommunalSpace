@@ -3,6 +3,8 @@ from django.db import models
 
 # Create your models here.
 class Post(models.Model):
+    CONTENT_MAX_LENGTH = 500
+
     USER = "user"
     BUSINESS = "business"
     POST_TYPE_CHOICES = (
@@ -91,6 +93,8 @@ class Like(models.Model):
 
 
 class Comment(models.Model):
+    CONTENT_MAX_LENGTH = 300
+
     author = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
