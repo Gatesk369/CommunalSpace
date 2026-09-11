@@ -19,7 +19,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login(email, password);
-      navigate("/");
+      navigate("/feed");
     } catch (err) {
       setError(err.message);
     } finally {

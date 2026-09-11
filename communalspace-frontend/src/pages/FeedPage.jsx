@@ -1,61 +1,79 @@
-import { useState } from "react";
-import Navbar1 from "../components/Navbar1";
+import { useState, useEffect } from "react";
 import AnnouncementBanner from "../components/AnnouncementBanner";
 import PostComposer from "../components/PostComposer";
 import PostCard from "../components/PostCard";
 import NearbyBusinessesCard from "../components/NearbyBusinessesCard";
 import CommunityAdminsCard from "../components/CommunityAdminsCard";
 import MessagesBar from "../components/MessagesBar";
+import { getPosts } from "../api/posts";
+import { formatTimeAgo } from "../utils/time";
 
 export default function FeedPage() {
   const [showBanner, setShowBanner] = useState(true);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    getPosts()
+      .then((data) => setPosts(data.results))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function handlePostCreated(newPost) {
+    setPosts((prev) => [newPost, ...prev]);
+  }
 
   return (
-    <div className="bg-cs-bg max-w-screen min-h-screen flex items-center justify-center p-4 sm:p-8">
-      <Navbar1 />
-      <div className="mt-24 pl-120 w-full grid grid-cols-[1.3fr_28rem] gap-8 mr-0">
-        <main className="w-full">
-          {showBanner && (
-            <AnnouncementBanner
-              message="Power shut off this week from 8am–7pm across Kisaasi, Kyanja."
-              onDismiss={() => setShowBanner(false)}
-            />
-          )}
-          <PostComposer />
-          <PostCard
-            authorName="Amara Muwonge"
-            community="Kisaasi"
-            timeAgo="2h ago"
-            content="Anyone else notice the streetlight near the community hall is out again?"
-            likeCount={14}
-            commentCount={6}
+    <div className="w-full grid grid-cols-[1.3fr_28rem] gap-8 p-4 sm:p-8">
+      <main className="w-full">
+        {showBanner && (
+          <AnnouncementBanner
+            message="Power shut off this week from 8am–7pm across Kisaasi, Kyanja."
+            onDismiss={() => setShowBanner(false)}
           />
-          <PostCard
-            authorName="Sunrise Bakery"
-            community="Kisaasi"
-            timeAgo="5h ago"
-            content="Fresh batch of cardamom rolls just came out of the oven 🍞"
-            likeCount={41}
-            commentCount={9}
-            isBusiness
-            media
-          />
-        </main>
+        )}
+        <PostComposer onPostCreated={handlePostCreated} />
 
-        <aside className="flex flex-col gap-8">
-          <NearbyBusinessesCard
-            businesses={[
-              { name: "Sunrise Bakery", initiallyFollowing: true },
-              { name: "Kisaasi Hardware" },
-              { name: "Heights Pharmacy" },
-            ]}
+        {loading && <p className="text-cs-muted text-sm">Loading posts...</p>}
+        {error && <p className="text-cs-red text-sm">{error}</p>}
+        {!loading && !error && posts.length === 0 && (
+          <p className="text-cs-muted text-sm">
+            No posts yet. Be the first to share something!
+          </p>
+        )}
+
+        {posts.map((post) => (
+          <PostCard
+            key={post.id}
+            id={post.id}
+            authorName={post.author_name}
+            community={post.community_name}
+            timeAgo={formatTimeAgo(post.created_at)}
+            content={post.content}
+            media={post.media}
+            likeCount={post.like_count}
+            commentCount={post.comment_count}
+            isBusiness={post.post_type === "business"}
+            userHasLiked={post.user_has_liked}
           />
-          <CommunityAdminsCard
-            admins={[{ name: "Rita Nakato" }, { name: "David Okello" }]}
-          />
-          <MessagesBar unreadCount={13} />
-        </aside>
-      </div>
+        ))}
+      </main>
+
+      <aside className="flex flex-col gap-8">
+        <NearbyBusinessesCard
+          businesses={[
+            { name: "Sunrise Bakery", initiallyFollowing: true },
+            { name: "Kisaasi Hardware" },
+            { name: "Heights Pharmacy" },
+          ]}
+        />
+        <CommunityAdminsCard
+          admins={[{ name: "Rita Nakato" }, { name: "David Okello" }]}
+        />
+        <MessagesBar unreadCount={13} />
+      </aside>
     </div>
   );
 }

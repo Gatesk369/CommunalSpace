@@ -7,7 +7,7 @@ export default function AppShell() {
     <div className="bg-cs-bg min-h-screen">
       <Sidebar />
       <Navbar1 />
-      <main>
+      <main className="pt-20 pl-118">
         <Outlet />
       </main>
     </div>
