@@ -409,6 +409,43 @@ class PostAPITests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_user_post_author_name_is_full_name(self):
+        self.authenticate()
+
+        response = self.client.get(reverse("post-detail", kwargs={"pk": self.post.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["author_name"], "John Resident")
+
+    def test_business_post_author_name_is_business_name(self):
+        self.authenticate(self.business_owner)
+
+        business_post = Post.objects.create(
+            author=self.business_owner,
+            branch=self.branch,
+            community=self.community_1,
+            post_type=Post.BUSINESS,
+            content="Business announcement",
+        )
+
+        response = self.client.get(
+            reverse("post-detail", kwargs={"pk": business_post.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["author_name"], "Test Business")
+
+    def test_post_with_deleted_author_shows_fallback_name(self):
+        self.authenticate()
+
+        self.post.author = None
+        self.post.save()
+
+        response = self.client.get(reverse("post-detail", kwargs={"pk": self.post.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["author_name"], "Deleted User")
+
     # ---------------------------------------------------------
     # POST UPDATE
     # ---------------------------------------------------------

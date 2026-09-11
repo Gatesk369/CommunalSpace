@@ -21,14 +21,18 @@ class PostSerializer(serializers.ModelSerializer):
     like_count = serializers.IntegerField(read_only=True)
     comment_count = serializers.IntegerField(read_only=True)
     user_has_liked = serializers.SerializerMethodField()
+    author_name = serializers.SerializerMethodField()
+    community_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = [
             "id",
             "author",
+            "author_name",
             "branch",
             "community",
+            "community_name",
             "post_type",
             "content",
             "status",
@@ -48,6 +52,16 @@ class PostSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_author_name(self, obj):
+        if obj.post_type == Post.BUSINESS and obj.branch:
+            return obj.branch.business.name
+        if not obj.author:
+            return "Deleted User"
+        return f"{obj.author.first_name} {obj.author.last_name}"
+
+    def get_community_name(self, obj):
+        return obj.community.name if obj.community else None
 
     def get_user_has_liked(self, obj):
         request = self.context.get("request")
