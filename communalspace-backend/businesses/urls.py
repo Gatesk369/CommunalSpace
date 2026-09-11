@@ -13,10 +13,8 @@ from .views import (
 )
 
 urlpatterns = [
-    path("businesses/", BusinessListDetailView.as_view(), name="business-list"),
-    path(
-        "businesses/<int:pk>/", BusinessListDetailView.as_view(), name="business-detail"
-    ),
+    path("", BusinessListDetailView.as_view(), name="business-list"),
+    path("<int:pk>/", BusinessListDetailView.as_view(), name="business-detail"),
     path("create-business/", BusinessCreateView.as_view(), name="business-create"),
     path(
         "update-business/<int:pk>/",
@@ -38,14 +36,14 @@ urlpatterns = [
         BusinessBranchApprovalView.as_view(),
         name="branch-review",
     ),
-    path("businesses/<int:pk>/rate/", RateBusinessView.as_view(), name="business-rate"),
+    path("<int:pk>/rate/", RateBusinessView.as_view(), name="business-rate"),
     path(
-        "businesses/<int:pk>/rate/remove/",
+        "<int:pk>/rate/remove/",
         UnrateBusinessView.as_view(),
         name="business-unrate",
     ),
     path(
-        "businesses/<int:pk>/follow/",
+        "<int:pk>/follow/",
         FollowToggleView.as_view(),
         name="business-follow",
     ),
