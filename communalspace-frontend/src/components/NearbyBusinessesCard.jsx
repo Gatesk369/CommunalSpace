@@ -1,8 +1,21 @@
 import { useState } from "react";
 import { motion } from "motion/react";
+import { toggleFollow } from "../api/businesses";
 
-function BusinessRow({ name, initiallyFollowing = false }) {
+function BusinessRow({ id, name, initiallyFollowing = false }) {
   const [following, setFollowing] = useState(initiallyFollowing);
+
+  async function handleToggle() {
+    const previous = following;
+    setFollowing(!following);
+
+    try {
+      await toggleFollow(id);
+    } catch {
+      setFollowing(previous);
+    }
+  }
+
   return (
     <div className="flex items-center gap-3 py-3 border-b border-cs-line last:border-b-0">
       <div className="w-9 h-9 rounded-xl bg-cs-line flex-shrink-0" />
@@ -11,7 +24,7 @@ function BusinessRow({ name, initiallyFollowing = false }) {
       </span>
       <motion.button
         whileTap={{ scale: 0.95 }}
-        onClick={() => setFollowing((f) => !f)}
+        onClick={handleToggle}
         className={`text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0 ${
           following
             ? "bg-[linear-gradient(120deg,theme(colors.cs-red),theme(colors.cs-purple))] text-white"
@@ -32,7 +45,7 @@ export default function NearbyBusinessesCard({ businesses }) {
       </h2>
       <div>
         {businesses.map((b) => (
-          <BusinessRow key={b.name} {...b} />
+          <BusinessRow key={b.id} {...b} />
         ))}
       </div>
     </div>

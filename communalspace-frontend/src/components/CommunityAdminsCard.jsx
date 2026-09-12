@@ -5,7 +5,7 @@ export default function CommunityAdminsCard({ admins }) {
       <div className="flex flex-col gap-3">
         {admins.map((admin) => (
           <div
-            key={admin.name}
+            key={admin.id}
             className="flex items-center gap-3 border-2 border-cs-line rounded-2xl px-3 py-2.5"
           >
             <div className="w-9 h-9 rounded-full bg-cs-magenta flex-shrink-0" />

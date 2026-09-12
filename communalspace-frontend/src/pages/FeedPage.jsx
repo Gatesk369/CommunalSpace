@@ -6,19 +6,54 @@ import NearbyBusinessesCard from "../components/NearbyBusinessesCard";
 import CommunityAdminsCard from "../components/CommunityAdminsCard";
 import MessagesBar from "../components/MessagesBar";
 import { getPosts } from "../api/posts";
+import { getBusinesses } from "../api/businesses";
+import { getCurrentUser } from "../api/accounts";
+import { getCommunityDetail } from "../api/communities";
+import { getAnnouncements } from "../api/announcements";
 import { formatTimeAgo } from "../utils/time";
 
 export default function FeedPage() {
   const [showBanner, setShowBanner] = useState(true);
   const [posts, setPosts] = useState([]);
+  const [businesses, setBusinesses] = useState([]);
+  const [admins, setAdmins] = useState([]);
+  const [announcement, setAnnouncement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getPosts()
-      .then((data) => setPosts(data.results))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    async function loadFeed() {
+      try {
+        const [postsData, businessesData, currentUser, announcementsData] =
+          await Promise.all([
+            getPosts(),
+            getBusinesses(),
+            getCurrentUser(),
+            getAnnouncements(),
+          ]);
+
+        setPosts(postsData.results);
+        setBusinesses(businessesData);
+
+        if (currentUser.community) {
+          const community = await getCommunityDetail(currentUser.community);
+          setAdmins(community.admin_names);
+
+          const relevant = announcementsData.filter((a) =>
+            a.communities.includes(currentUser.community),
+          );
+          if (relevant.length > 0) {
+            setAnnouncement(relevant[0]);
+          }
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadFeed();
   }, []);
 
   function handlePostCreated(newPost) {
@@ -28,9 +63,10 @@ export default function FeedPage() {
   return (
     <div className="w-full grid grid-cols-[1.3fr_28rem] gap-8 p-4 sm:p-8">
       <main className="w-full">
-        {showBanner && (
+        {showBanner && announcement && (
           <AnnouncementBanner
-            message="Power shut off this week from 8am–7pm across Kisaasi, Kyanja."
+            urgency={announcement.urgency}
+            message={announcement.title}
             onDismiss={() => setShowBanner(false)}
           />
         )}
@@ -63,15 +99,13 @@ export default function FeedPage() {
 
       <aside className="flex flex-col gap-8">
         <NearbyBusinessesCard
-          businesses={[
-            { name: "Sunrise Bakery", initiallyFollowing: true },
-            { name: "Kisaasi Hardware" },
-            { name: "Heights Pharmacy" },
-          ]}
+          businesses={businesses.map((b) => ({
+            id: b.id,
+            name: b.name,
+            initiallyFollowing: b.is_following,
+          }))}
         />
-        <CommunityAdminsCard
-          admins={[{ name: "Rita Nakato" }, { name: "David Okello" }]}
-        />
+        <CommunityAdminsCard admins={admins} />
         <MessagesBar unreadCount={13} />
       </aside>
     </div>
