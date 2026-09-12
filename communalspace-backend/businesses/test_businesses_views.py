@@ -230,6 +230,37 @@ class BusinessListDetailViewTest(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_is_following_false_when_user_does_not_follow(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("business-detail", args=[self.approved_business.pk])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["is_following"])
+
+    def test_is_following_true_when_user_follows_business(self):
+        Follow.objects.create(follower=self.resident, business=self.approved_business)
+
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("business-detail", args=[self.approved_business.pk])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["is_following"])
+
+    def test_is_following_present_in_list_view(self):
+        Follow.objects.create(follower=self.resident, business=self.approved_business)
+
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(reverse("business-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        business_data = next(b for b in response.data if b["name"] == "Approved")
+        self.assertTrue(business_data["is_following"])
+
 
 class BusinessCreateViewTest(TestCase):
     def setUp(self):

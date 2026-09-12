@@ -326,3 +326,42 @@ class CommunityMembershipViewTest(TestCase):
             reverse("community-leave", args=[self.community.pk])
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class CommunityAdminNamesTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.community_admin = create_user("cadmin@test.com", role="community admin")
+        self.resident = create_user("resident@test.com", role="resident")
+        self.community = create_community(admin=self.community_admin)
+
+    def test_admin_names_included_in_community_detail(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("community-detail", args=[self.community.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("admin_names", response.data)
+
+    def test_admin_names_contains_correct_admin(self):
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("community-detail", args=[self.community.pk])
+        )
+
+        admin_ids = [a["id"] for a in response.data["admin_names"]]
+        self.assertIn(self.community_admin.id, admin_ids)
+
+    def test_admin_names_empty_when_no_admins(self):
+        empty_community = create_community(name="No Admins Community")
+
+        token = get_token(self.client, "resident@test.com")
+        auth_client(self.client, token)
+        response = self.client.get(
+            reverse("community-detail", args=[empty_community.pk])
+        )
+
+        self.assertEqual(response.data["admin_names"], [])

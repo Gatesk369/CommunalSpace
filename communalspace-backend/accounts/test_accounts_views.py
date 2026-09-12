@@ -1,3 +1,4 @@
+from communities.models import Community
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -175,3 +176,54 @@ class UserDeleteViewTest(TestCase):
         auth_client(self.client, token)
         response = self.client.delete(reverse("user-delete", args=[self.other.pk]))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class CurrentUserViewTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.community = Community.objects.create(
+            name="Test Community",
+            city="Kampala",
+            address="Test Address",
+        )
+
+        self.user = User.objects.create_user(
+            email="currentuser@example.com",
+            password="password123",
+            first_name="Current",
+            last_name="User",
+            role=User.RESIDENT,
+            community=self.community,
+            is_active=True,
+        )
+
+    def test_requires_authentication(self):
+        response = self.client.get(reverse("current-user"))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_returns_authenticated_users_own_data(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("current-user"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], self.user.id)
+        self.assertEqual(response.data["email"], "currentuser@example.com")
+
+    def test_includes_community_id(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("current-user"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["community"], self.community.id)
+
+    def test_does_not_expose_password(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("current-user"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("password", response.data)

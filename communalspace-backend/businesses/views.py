@@ -57,7 +57,9 @@ class BusinessListDetailView(BusinessBaseView):
             if category:
                 businesses = businesses.filter(category=category)
 
-            serializer = BusinessSerializer(businesses, many=True)
+            serializer = BusinessSerializer(
+                businesses, many=True, context={"request": request}
+            )
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         try:
@@ -74,7 +76,7 @@ class BusinessListDetailView(BusinessBaseView):
             return Response(
                 {"detail": "Business not found."}, status=status.HTTP_404_NOT_FOUND
             )
-        serializer = BusinessSerializer(business)
+        serializer = BusinessSerializer(business, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

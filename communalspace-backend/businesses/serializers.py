@@ -23,6 +23,7 @@ class BusinessSerializer(ModelSerializer):
     branch = BusinessBranchSerializer(write_only=True)
     average_rating = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
 
     class Meta:
         model = Business
@@ -38,6 +39,7 @@ class BusinessSerializer(ModelSerializer):
             "branch",
             "average_rating",
             "rating_count",
+            "is_following",
         ]
         read_only_fields = ["owner", "status", "rejection_reason", "created_at"]
 
@@ -49,6 +51,14 @@ class BusinessSerializer(ModelSerializer):
 
     def get_rating_count(self, obj):
         return getattr(obj, "rating_count", 0)
+
+    def get_is_following(self, obj):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return False
+
+        return obj.followers.filter(follower=request.user).exists()
 
     def create(self, validated_data):
         branch_data = validated_data.pop("branch")
